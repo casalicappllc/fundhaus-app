@@ -7,6 +7,7 @@ import { STAGES, money, type Deal, type Lender, type Submission } from '@/lib/ty
 import { matchAll, paperGrade } from '@/lib/matching';
 import DealForm from '@/components/DealForm';
 import Documents, { removeDealFiles } from '@/components/Documents';
+import Positions from '@/components/Positions';
 
 export default function DealPage() {
   const { id } = useParams<{ id: string }>();
@@ -83,6 +84,7 @@ export default function DealPage() {
               <div><span>Paper grade</span><b>{g} paper</b></div>
             </div>
           </div>
+          <Positions deal={deal} onCountChange={load} />
           <div className="card">
             <h3>Lender match — {matches.filter(m => m.pass).length} of {matches.length} fit</h3>
             {matches.length === 0 && <p className="note">No lenders yet. <Link href="/lenders" style={{ textDecoration: 'underline' }}>Add your lender list</Link> and every deal is scored against it.</p>}
