@@ -89,7 +89,7 @@ export default function DealPage() {
                 <div className="match" key={m.lender.id}>
                   <div className="match-h"><b>{m.lender.name}</b>
                     <span className={`tag ${m.score >= 90 ? 'a' : m.score >= 65 ? 'b' : 'c'}`}>{m.score}% fit</span></div>
-                  <p>{[m.lender.paper + ' paper', m.lender.factor_low && `${m.lender.factor_low}–${m.lender.factor_high}`, m.lender.speed,
+                  <p>{[m.lender.paper && m.lender.paper + ' paper', m.lender.factor_low && (m.lender.factor_high && m.lender.factor_high !== m.lender.factor_low ? `${m.lender.factor_low}–${m.lender.factor_high}` : `${m.lender.factor_low}`), m.lender.speed,
                     m.lender.commission_pct != null && `${m.lender.commission_pct}% commission`].filter(Boolean).join(' · ')}</p>
                   <div className="tags">{m.checks.map(c => <span key={c.label} className={`tag ${c.ok ? 'a' : 'c'}`}>{c.ok ? '✓' : '✕'} {c.label}</span>)}</div>
                   {fails.length > 0 && <p className="fail" style={{ marginTop: 9, marginBottom: 0 }}>{fails.map(c => `${c.label}: ${c.got} (needs ${c.need})`).join(' · ')}</p>}

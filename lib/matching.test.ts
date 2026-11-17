@@ -4,7 +4,7 @@ import { matchLender, matchAll, paperGrade } from './matching.ts';
 import type { Lender } from './types.ts';
 
 const L = (o: Partial<Lender>): Lender => ({ id: '1', name: 'L', paper: 'B', min_revenue: 15000, min_tib_months: 12, min_fico: 580,
-  max_positions: 2, min_amount: 10000, max_amount: 150000, factor_low: 1.28, factor_high: 1.42, commission_pct: 10, speed: null,
+  min_positions: 0, max_positions: 2, min_amount: 10000, max_amount: 150000, factor_low: 1.28, factor_high: 1.42, commission_pct: 10, speed: null,
   excluded_industries: ['Cannabis'], notes: null, active: true, ...o });
 const D = { monthly_revenue: 42000, tib_months: 50, fico: 612, positions: 1, amount_requested: 75000, industry: 'Automotive' };
 
@@ -33,6 +33,15 @@ test('max amount of 0 means no cap', () => {
 test('matchAll skips inactive lenders and ranks best fit first', () => {
   const r = matchAll(D, [L({ id: 'a', min_fico: 700 }), L({ id: 'b' }), L({ id: 'c', active: false })]);
   assert.deepEqual(r.map(x => x.lender.id), ['b', 'a']);
+});
+test('a lender that takes no first positions rejects a merchant with none open', () => {
+  const l = L({ min_positions: 1, max_positions: 2 });
+  assert.equal(matchLender({ ...D, positions: 0 }, l).pass, false);
+  assert.equal(matchLender({ ...D, positions: 1 }, l).pass, true);
+  assert.equal(matchLender({ ...D, positions: 3 }, l).pass, false);
+});
+test('no position cap accepts any number of open positions', () => {
+  assert.equal(matchLender({ ...D, positions: 12 }, L({ max_positions: null })).pass, true);
 });
 test('paper grades', () => {
   assert.equal(paperGrade({ fico: 650, positions: 1 }), 'A');

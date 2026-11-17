@@ -10,15 +10,16 @@ create table if not exists team (
 create table if not exists lenders (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  paper text not null default 'B',
+  paper text,                                    -- optional: A, B, C ...
   min_revenue integer not null default 0,        -- monthly, dollars
   min_tib_months integer not null default 0,
   min_fico integer not null default 0,
-  max_positions integer not null default 0,
+  min_positions integer not null default 0,      -- open positions the merchant must already have
+  max_positions integer,                         -- open positions allowed; empty = no cap
   min_amount integer not null default 0,
   max_amount integer not null default 0,
-  factor_low numeric(4,2),
-  factor_high numeric(4,2),
+  factor_low numeric(5,3),
+  factor_high numeric(5,3),
   commission_pct numeric(4,1),
   speed text,
   excluded_industries text[] not null default '{}',

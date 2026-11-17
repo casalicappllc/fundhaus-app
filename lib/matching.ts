@@ -13,7 +13,9 @@ export function matchLender(deal: DealFacts, l: Lender): Match {
     { label: 'Monthly revenue', ok: deal.monthly_revenue >= l.min_revenue, got: $(deal.monthly_revenue), need: 'min ' + $(l.min_revenue) },
     { label: 'Time in business', ok: deal.tib_months >= l.min_tib_months, got: deal.tib_months + ' mo', need: 'min ' + l.min_tib_months + ' mo' },
     { label: 'FICO', ok: deal.fico >= l.min_fico, got: String(deal.fico), need: 'min ' + l.min_fico },
-    { label: 'Open positions', ok: deal.positions <= l.max_positions, got: String(deal.positions), need: 'max ' + l.max_positions },
+    { label: 'Open positions', ok: deal.positions >= l.min_positions && (l.max_positions == null || deal.positions <= l.max_positions),
+      got: String(deal.positions), need: l.max_positions == null ? (l.min_positions ? l.min_positions + ' or more' : 'any')
+        : l.min_positions ? l.min_positions + '–' + l.max_positions : 'max ' + l.max_positions },
     { label: 'Amount', ok: deal.amount_requested >= l.min_amount && (l.max_amount === 0 || deal.amount_requested <= l.max_amount),
       got: $(deal.amount_requested), need: $(l.min_amount) + '–' + (l.max_amount ? $(l.max_amount) : 'no cap') },
     { label: 'Industry', ok: !excluded.includes(deal.industry.trim().toLowerCase()), got: deal.industry, need: excluded.length ? 'not ' + excluded.join(', ') : 'any' },

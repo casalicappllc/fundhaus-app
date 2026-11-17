@@ -1,6 +1,6 @@
 export type Lender = {
-  id: string; name: string; paper: string;
-  min_revenue: number; min_tib_months: number; min_fico: number; max_positions: number;
+  id: string; name: string; paper: string | null;
+  min_revenue: number; min_tib_months: number; min_fico: number; min_positions: number; max_positions: number | null;
   min_amount: number; max_amount: number;
   factor_low: number | null; factor_high: number | null; commission_pct: number | null;
   speed: string | null; excluded_industries: string[]; notes: string | null; active: boolean;
@@ -18,6 +18,7 @@ export const STAGES: [string, string][] = [
   ['new', 'New lead'], ['prequal', 'Pre-qualified'], ['submitted', 'Submitted'],
   ['offers', 'Offers in'], ['contracts', 'Contracts out'], ['funded', 'Funded'], ['declined', 'Declined'],
 ];
-export const INDUSTRIES = ['Automotive','Construction','Dental','Fitness','Food & Beverage','Healthcare','Logistics',
-  'Professional Services','Retail','Services','Trucking','Cannabis','Adult','Other'];
+export const INDUSTRIES = ['Adult','Auto Repair','Auto Sales','Cannabis / CBD','Cash Business','Construction','Consulting','Crypto',
+  'Dental','E-Commerce','Fitness','Gambling','Gas Station','Healthcare','Hospitality','Law Firm','Logistics','Manufacturing','Non-Profit',
+  'Professional Services','Restaurant','Retail','Services','Staffing','Trucking','Vape Shop','Wholesale','Other'];
 export const money = (n: number | null | undefined) => '$' + (n ?? 0).toLocaleString('en-US');
