@@ -32,9 +32,9 @@ export function burden(positions: PositionLike[], monthlyRevenue: number) {
   return { count: active.length, perWeek, perMonth, pct };
 }
 
-/** Leverage = monthly payments on active positions ÷ monthly revenue. Under 25% is light, 25–40% heavy, 40%+ very heavy. */
+/** Leverage = monthly payments on active positions ÷ monthly revenue. Under 25% is light, 25–48% heavy, 48%+ very heavy. */
 export type LeverageBand = 'light' | 'heavy' | 'very heavy';
 export function leverageBand(pct: number | null): LeverageBand | null {
   if (pct == null) return null;
-  return pct >= 40 ? 'very heavy' : pct >= 25 ? 'heavy' : 'light';
+  return pct >= 48 ? 'very heavy' : pct >= 25 ? 'heavy' : 'light';
 }
