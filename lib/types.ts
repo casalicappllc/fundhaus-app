@@ -18,7 +18,8 @@ export const STAGES: [string, string][] = [
   ['new', 'New lead'], ['prequal', 'Pre-qualified'], ['submitted', 'Submitted'],
   ['offers', 'Offers in'], ['contracts', 'Contracts out'], ['funded', 'Funded'], ['declined', 'Declined'],
 ];
-export const INDUSTRIES = ['Adult','Auto Repair','Auto Sales','Cannabis / CBD','Cash Business','Construction','Consulting','Crypto',
-  'Dental','E-Commerce','Fitness','Gambling','Gas Station','Healthcare','Hospitality','Law Firm','Logistics','Manufacturing','Non-Profit',
-  'Professional Services','Restaurant','Retail','Services','Staffing','Trucking','Vape Shop','Wholesale','Other'];
+export const INDUSTRIES = ['Adult','Auto Repair','Auto Sales','Bail Bonds','Cannabis / CBD','Cash Business','Collections','Construction','Consulting',
+  'Crypto','Debt Relief / Credit Repair','Dental','E-Commerce','Firearms','Fitness','Gambling','Gas Station','Healthcare','Hospitality',
+  'Investment / Brokerage','Law Firm','Logistics','Manufacturing','Money Services / Check Cashing','Non-Profit','Professional Services',
+  'Real Estate','Restaurant','Retail','Services','Solar','Staffing','Travel Agency','Trucking','Vape Shop','Wholesale','Other'];
 export const money = (n: number | null | undefined) => '$' + (n ?? 0).toLocaleString('en-US');
