@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { STAGES, money, type Deal, type Lender, type Submission } from '@/lib/types';
 import { matchAll, paperGrade } from '@/lib/matching';
 import DealForm from '@/components/DealForm';
+import Documents, { removeDealFiles } from '@/components/Documents';
 
 export default function DealPage() {
   const { id } = useParams<{ id: string }>();
@@ -48,7 +49,9 @@ export default function DealPage() {
     await run(supabase.from('deals').update({ funded_amount: n('funded_amount'), commission: n('commission'), stage: 'funded' }).eq('id', deal.id));
   };
   const remove = async () => {
-    if (!window.confirm(`Delete ${deal.business}? This can't be undone.`)) return;
+    if (!window.confirm(`Delete ${deal.business} and all of its documents? This can't be undone.`)) return;
+    const fileErr = await removeDealFiles(deal.id);
+    if (fileErr) { setErr(`Couldn't delete the deal's documents, so the deal was kept: ${fileErr}`); return; }
     const { error } = await supabase.from('deals').delete().eq('id', deal.id);
     if (error) setErr(error.message); else router.push('/');
   };
@@ -119,6 +122,7 @@ export default function DealPage() {
               {deal.notes && <div><span>Notes</span><b style={{ fontWeight: 500 }}>{deal.notes}</b></div>}
             </div>
           </div>
+          <Documents dealId={deal.id} />
           <form className="card" onSubmit={saveFunding}>
             <h3>Funding</h3>
             <div className="form">

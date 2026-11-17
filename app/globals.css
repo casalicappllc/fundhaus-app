@@ -54,6 +54,17 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 70px}
 .match p{font-size:12px;color:var(--tx3);margin:3px 0 9px}
 .match .fail{color:var(--bad)}
 .match .acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.drop{display:flex;flex-wrap:wrap;gap:10px;align-items:center;border:1px dashed var(--line2);border-radius:12px;padding:12px}
+.drop.on{border-color:#fff;background:rgba(255,255,255,.04)}
+.drop select{width:auto;flex:1;min-width:170px}
+.drop .note{flex-basis:100%;font-size:12px;color:var(--tx3)}
+.doc{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--card2);margin-top:9px}
+.doc-main{flex:1;min-width:0}
+.doc-name{display:block;max-width:100%;font-weight:700;font-size:13.5px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-name:hover{text-decoration:underline}
+.doc-main span{display:block;font-size:11.5px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-kind{width:auto;padding:6px 8px;font-size:12.5px}
+.doc-acts{display:flex;gap:6px}
 .form{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .form .full{grid-column:1/-1}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;display:grid;place-items:center;padding:16px}

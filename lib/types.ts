@@ -13,6 +13,15 @@ export type Deal = {
   funded_amount: number | null; commission: number | null; notes: string | null; created_at: string;
 };
 export type Submission = { id: string; deal_id: string; lender_id: string; status: string; created_at: string };
+export type DealDocument = {
+  id: string; deal_id: string; kind: string; file_name: string; storage_path: string;
+  size_bytes: number; uploaded_by: string | null; created_at: string;
+};
+export const DOC_KINDS: [string, string][] = [
+  ['bank_statement', 'Bank statement'], ['application', 'Application'], ['id', "Driver's license / ID"],
+  ['voided_check', 'Voided check'], ['tax_return', 'Tax return'], ['contract', 'Contract'], ['other', 'Other'],
+];
+export const DOCS_BUCKET = 'deal-docs';
 
 export const STAGES: [string, string][] = [
   ['new', 'New lead'], ['prequal', 'Pre-qualified'], ['submitted', 'Submitted'],
