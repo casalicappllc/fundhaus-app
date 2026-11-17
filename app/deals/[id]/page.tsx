@@ -7,7 +7,8 @@ import { STAGES, money, type Deal, type Lender, type Submission } from '@/lib/ty
 import { matchAll, paperGrade } from '@/lib/matching';
 import DealForm from '@/components/DealForm';
 import Documents, { removeDealFiles } from '@/components/Documents';
-import Positions from '@/components/Positions';
+import Positions, { LEV_CLASS, type Position } from '@/components/Positions';
+import { burden, leverageBand } from '@/lib/positions';
 
 export default function DealPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +18,7 @@ export default function DealPage() {
   const [subs, setSubs] = useState<Submission[]>([]);
   const [err, setErr] = useState('');
   const [editing, setEditing] = useState(false);
+  const [positions, setPositions] = useState<Position[] | null>(null);
 
   const load = useCallback(async () => {
     const [d, l, s] = await Promise.all([
@@ -57,6 +59,9 @@ export default function DealPage() {
     if (error) setErr(error.message); else router.push('/');
   };
   const g = paperGrade(deal);
+  const lev = positions ? burden(positions, deal.monthly_revenue) : null;
+  const band = lev ? leverageBand(lev.pct) : null;
+  const pending = positions ? positions.filter(p => p.status === 'active' && !(p.payment > 0)).length : 0;
 
   return (
     <>
@@ -82,9 +87,19 @@ export default function DealPage() {
               <div><span>Open positions</span><b>{deal.positions}</b></div>
               <div><span>NSFs, last 90 days</span><b>{deal.nsf_90d}</b></div>
               <div><span>Paper grade</span><b>{g} paper</b></div>
+              <div className="lev">
+                <span>Leverage — payments on current positions ÷ monthly revenue</span>
+                {!lev ? <b>…</b>
+                  : lev.count === 0 ? <b>0% · no positions listed</b>
+                  : lev.pct == null ? <b>Add monthly revenue to see leverage</b>
+                  : <>
+                    <b className={LEV_CLASS[band ?? ''] ?? ''}>{lev.pct}% · {band}</b>
+                    <small>${Math.round(lev.perMonth).toLocaleString('en-US')}/mo in payments on {money(deal.monthly_revenue)}/mo revenue{pending > 0 && ` · ${pending} position${pending > 1 ? 's' : ''} not debiting yet, so real leverage is higher`}</small>
+                  </>}
+              </div>
             </div>
           </div>
-          <Positions deal={deal} onCountChange={load} />
+          <Positions deal={deal} onCountChange={load} onLoaded={setPositions} />
           <div className="card">
             <h3>Lender match — {matches.filter(m => m.pass).length} of {matches.length} fit</h3>
             {matches.length === 0 && <p className="note">No lenders yet. <Link href="/lenders" style={{ textDecoration: 'underline' }}>Add your lender list</Link> and every deal is scored against it.</p>}

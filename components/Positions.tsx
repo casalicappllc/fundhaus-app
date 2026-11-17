@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Deal } from '@/lib/types';
-import { FREQUENCIES, FREQ_SHORT, POSITION_KINDS, burden, weekly, monthly } from '@/lib/positions';
+import { FREQUENCIES, FREQ_SHORT, POSITION_KINDS, burden, weekly, monthly, leverageBand } from '@/lib/positions';
 
 export type Position = {
   id: string; deal_id: string; funder: string; kind: string; payment: number; frequency: string;
@@ -13,9 +13,10 @@ const cents = (n: number | null | undefined) => '$' + Number(n ?? 0).toLocaleStr
 const whole = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 const amt = (v: FormDataEntryValue | null) => { const n = Number(String(v ?? '').replace(/[$,\s]/g, '')); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null; };
 const day = (s: string | null) => s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+export const LEV_CLASS: Record<string, string> = { light: 'good', heavy: 'warn', 'very heavy': 'bad' };
 const kindLabel = (k: string) => POSITION_KINDS.find(([v]) => v === k)?.[1] ?? 'Other';
 
-export default function Positions({ deal, onCountChange }: { deal: Deal; onCountChange: () => void }) {
+export default function Positions({ deal, onCountChange, onLoaded }: { deal: Deal; onCountChange: () => void; onLoaded?: (rows: Position[]) => void }) {
   const [rows, setRows] = useState<Position[]>([]);
   const [editing, setEditing] = useState<Position | 'new' | null>(null);
   const [err, setErr] = useState('');
@@ -24,8 +25,8 @@ export default function Positions({ deal, onCountChange }: { deal: Deal; onCount
     const { data, error } = await supabase.from('positions').select('*').eq('deal_id', deal.id).order('funded_on', { ascending: false, nullsFirst: false });
     if (error) { setErr(error.message); return []; }
     const list = (data ?? []).map(p => ({ ...p, payment: Number(p.payment), funded_amount: p.funded_amount == null ? null : Number(p.funded_amount) })) as Position[];
-    setRows(list); return list;
-  }, [deal.id]);
+    setRows(list); onLoaded?.(list); return list;
+  }, [deal.id, onLoaded]);
   useEffect(() => { load(); }, [load]);
 
   // Keep the deal's "open positions" number (used by lender matching) equal to the active positions listed here.
@@ -70,7 +71,7 @@ export default function Positions({ deal, onCountChange }: { deal: Deal; onCount
         <div className="kv" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 14 }}>
           <div><span>Total weekly</span><b>{whole(b.perWeek)}</b></div>
           <div><span>Total monthly</span><b>{whole(b.perMonth)}</b></div>
-          <div><span>Of monthly revenue</span><b className={b.pct == null ? '' : b.pct >= 40 ? 'bad' : b.pct >= 25 ? 'warn' : 'good'}>{b.pct == null ? '—' : b.pct + '%'}</b></div>
+          <div><span>Leverage</span><b className={LEV_CLASS[leverageBand(b.pct) ?? ''] ?? ''}>{b.pct == null ? 'Add revenue' : `${b.pct}% · ${leverageBand(b.pct)}`}</b></div>
         </div>
       )}
       {unknown > 0 && <p className="note" style={{ marginBottom: 10 }}>{unknown} position{unknown > 1 ? 's have' : ' has'} no payment yet, so the totals are low until {unknown > 1 ? 'they start' : 'it starts'} debiting.</p>}

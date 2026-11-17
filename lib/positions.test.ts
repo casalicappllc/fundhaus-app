@@ -33,3 +33,12 @@ test('no revenue means no percentage', () => {
 test('unknown frequency counts as zero rather than crashing', () => {
   assert.equal(weekly({ payment: 100, frequency: 'yearly' }), 0);
 });
+
+import { leverageBand } from './positions.ts';
+test('leverage bands: under 25 light, 25 to under 40 heavy, 40 and up very heavy', () => {
+  assert.equal(leverageBand(19.3), 'light');
+  assert.equal(leverageBand(25), 'heavy');
+  assert.equal(leverageBand(39.9), 'heavy');
+  assert.equal(leverageBand(40), 'very heavy');
+  assert.equal(leverageBand(null), null);
+});

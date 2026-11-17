@@ -5,23 +5,27 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { STAGES, money, type Deal, type Lender } from '@/lib/types';
 import { matchAll, paperGrade } from '@/lib/matching';
+import { burden, leverageBand, type PositionLike } from '@/lib/positions';
 import DealForm from '@/components/DealForm';
 
 export default function Pipeline() {
   const [deals, setDeals] = useState<Deal[] | null>(null);
   const [lenders, setLenders] = useState<Lender[]>([]);
+  const [positions, setPositions] = useState<(PositionLike & { deal_id: string })[]>([]);
   const [err, setErr] = useState('');
   const [adding, setAdding] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     (async () => {
-      const [d, l] = await Promise.all([
+      const [d, l, p] = await Promise.all([
         supabase.from('deals').select('*').order('created_at', { ascending: false }),
         supabase.from('lenders').select('*'),
+        supabase.from('positions').select('deal_id, payment, frequency, status'),
       ]);
       if (d.error || l.error) { setErr((d.error ?? l.error)!.message); return; }
       setDeals(d.data as Deal[]); setLenders(l.data as Lender[]);
+      if (!p.error) setPositions((p.data ?? []).map(x => ({ ...x, payment: Number(x.payment) })));
     })();
   }, []);
 
@@ -53,6 +57,8 @@ export default function Pipeline() {
               {ds.length === 0 && <div className="empty">—</div>}
               {ds.map(d => {
                 const g = paperGrade(d); const fit = matchAll(d, lenders).filter(m => m.pass).length;
+                const lev = burden(positions.filter(x => x.deal_id === d.id), d.monthly_revenue);
+                const band = lev.count ? leverageBand(lev.pct) : null;
                 return (
                   <Link className="deal" key={d.id} href={`/deals/${d.id}`}>
                     <b>{d.business}</b>
@@ -62,6 +68,7 @@ export default function Pipeline() {
                       <span className={`tag ${g.toLowerCase()}`}>{g} paper</span>
                       <span className="tag">{d.fico}</span>
                       {d.positions > 0 && <span className="tag">{d.positions} pos</span>}
+                      {band && <span className={`tag ${band === 'light' ? 'a' : band === 'heavy' ? 'b' : 'c'}`}>{Math.round(lev.pct!)}% lev</span>}
                       <span className={`tag ${fit ? 'a' : 'c'}`}>{fit} fit</span>
                     </div>
                   </Link>
