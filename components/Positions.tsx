@@ -13,7 +13,8 @@ const cents = (n: number | null | undefined) => '$' + Number(n ?? 0).toLocaleStr
 const whole = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 const amt = (v: FormDataEntryValue | null) => { const n = Number(String(v ?? '').replace(/[$,\s]/g, '')); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null; };
 const day = (s: string | null) => s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-export const LEV_CLASS: Record<string, string> = { light: 'good', heavy: 'warn', 'very heavy': 'bad' };
+export const LEV_CLASS: Record<string, string> = { light: 'good', moderate: 'mild', heavy: 'warn', 'very heavy': 'bad' };
+export const LEV_TAG: Record<string, string> = { light: 'a', moderate: 'm', heavy: 'b', 'very heavy': 'c' };
 const kindLabel = (k: string) => POSITION_KINDS.find(([v]) => v === k)?.[1] ?? 'Other';
 
 export default function Positions({ deal, onCountChange, onLoaded }: { deal: Deal; onCountChange: () => void; onLoaded?: (rows: Position[]) => void }) {

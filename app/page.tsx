@@ -7,6 +7,7 @@ import { STAGES, money, type Deal, type Lender } from '@/lib/types';
 import { matchAll, paperGrade } from '@/lib/matching';
 import { burden, leverageBand, type PositionLike } from '@/lib/positions';
 import DealForm from '@/components/DealForm';
+import { LEV_TAG } from '@/components/Positions';
 
 export default function Pipeline() {
   const [deals, setDeals] = useState<Deal[] | null>(null);
@@ -68,7 +69,7 @@ export default function Pipeline() {
                       <span className={`tag ${g.toLowerCase()}`}>{g} paper</span>
                       <span className="tag">{d.fico}</span>
                       {d.positions > 0 && <span className="tag">{d.positions} pos</span>}
-                      {band && <span className={`tag ${band === 'light' ? 'a' : band === 'heavy' ? 'b' : 'c'}`}>{Math.round(lev.pct!)}% lev</span>}
+                      {band && <span className={`tag ${LEV_TAG[band]}`}>{Math.round(lev.pct!)}% lev</span>}
                       <span className={`tag ${fit ? 'a' : 'c'}`}>{fit} fit</span>
                     </div>
                   </Link>

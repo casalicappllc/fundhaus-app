@@ -35,10 +35,12 @@ test('unknown frequency counts as zero rather than crashing', () => {
 });
 
 import { leverageBand } from './positions.ts';
-test('leverage bands: under 25 light, 25 to under 48 heavy, 48 and up very heavy', () => {
+test('leverage bands: <25 light, 25-35 moderate, 35-48 heavy, 48+ very heavy', () => {
   assert.equal(leverageBand(19.3), 'light');
-  assert.equal(leverageBand(25), 'heavy');
-  assert.equal(leverageBand(40), 'heavy');
+  assert.equal(leverageBand(24.9), 'light');
+  assert.equal(leverageBand(25), 'moderate');
+  assert.equal(leverageBand(34.9), 'moderate');
+  assert.equal(leverageBand(35), 'heavy');
   assert.equal(leverageBand(47.9), 'heavy');
   assert.equal(leverageBand(48), 'very heavy');
   assert.equal(leverageBand(null), null);

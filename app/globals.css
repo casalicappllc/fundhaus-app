@@ -1,5 +1,5 @@
 :root{--bg:#0A0A0A;--bg2:#0F0F0F;--card:#161616;--card2:#1E1E1E;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.16);
---tx:#fff;--tx2:#A3A3A3;--tx3:#6B6B6B;--ok:#4ADE80;--warn:#FBBF24;--bad:#F87171}
+--tx:#fff;--tx2:#A3A3A3;--tx3:#6B6B6B;--ok:#4ADE80;--warn:#FBBF24;--mild:#FDE68A;--bad:#F87171}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:"Manrope Variable",-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
@@ -41,7 +41,7 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 70px}
 .deal .amt{font-size:16px;font-weight:800}
 .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
 .tag{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--card2);color:var(--tx2);white-space:nowrap}
-.tag.a{background:rgba(74,222,128,.14);color:var(--ok)}.tag.b{background:rgba(251,191,36,.14);color:var(--warn)}.tag.c{background:rgba(248,113,113,.14);color:var(--bad)}
+.tag.a{background:rgba(74,222,128,.14);color:var(--ok)}.tag.m{background:rgba(253,230,138,.12);color:var(--mild)}.tag.b{background:rgba(251,191,36,.14);color:var(--warn)}.tag.c{background:rgba(248,113,113,.14);color:var(--bad)}
 .empty{font-size:12px;color:var(--tx3);padding:6px 3px}
 .grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start}
 .kv{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
@@ -78,7 +78,7 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 70px}
 .kv .lev{grid-column:1/-1;border-top:1px solid var(--line);padding-top:12px}
 .kv .lev b{font-size:20px;font-weight:800}
 .kv .lev small{display:block;font-size:12px;color:var(--tx3);margin-top:2px}
-.kv b.good{color:var(--ok)}.kv b.warn{color:var(--warn)}.kv b.bad{color:var(--bad)}
+.kv b.good{color:var(--ok)}.kv b.mild{color:var(--mild)}.kv b.warn{color:var(--warn)}.kv b.bad{color:var(--bad)}
 .form{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .form .full{grid-column:1/-1}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;display:grid;place-items:center;padding:16px}
