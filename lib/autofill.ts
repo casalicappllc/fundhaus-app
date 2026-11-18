@@ -183,8 +183,11 @@ export function planUpdate(deal: Deal, ex: Extraction, existing: ExistingPositio
 
 // ---- What the reader is asked for -------------------------------------------------------------
 
-const num = { type: ['number', 'null'] } as const;
-const str = { type: ['string', 'null'] } as const;
+// Structured output allows at most 16 nullable fields, so "not found" is "" for text and 0 for numbers;
+// only the balances (which can really be 0 or negative) stay nullable.
+const num = { type: 'number' } as const;
+const str = { type: 'string' } as const;
+const maybeNum = { type: ['number', 'null'] } as const;
 
 export const EXTRACT_TOOL = {
   name: 'record_deal',
@@ -222,7 +225,7 @@ export const EXTRACT_TOOL = {
             deposit_count: { type: 'integer' },
             nsf_count: { type: 'integer', description: 'NSF, returned item and overdraft fee events' },
             negative_days: { type: 'integer' },
-            ending_balance: num, avg_daily_balance: num,
+            ending_balance: maybeNum, avg_daily_balance: maybeNum,
           },
         },
       },
@@ -238,7 +241,7 @@ export const EXTRACT_TOOL = {
             frequency: { type: 'string', enum: ['daily', 'weekly', 'biweekly', 'monthly'] },
             first_seen: { ...str, description: 'YYYY-MM-DD' }, last_seen: { ...str, description: 'YYYY-MM-DD' },
             still_active: { type: 'boolean', description: 'Debits continue into the last 10 days of the latest statement' },
-            funded_amount: { ...num, description: 'Funding deposit from this funder, if one appears' },
+            funded_amount: { ...num, description: 'Funding deposit from this funder, or 0 if none appears' },
             funded_on: { ...str, description: 'YYYY-MM-DD of that funding deposit' },
           },
         },
@@ -252,7 +255,7 @@ export const EXTRACT_PROMPT = `You are an underwriting assistant for FundHaus, a
 The attached files are one merchant's funding application and business bank statements. Read them and reply with the JSON described by the schema.
 
 Rules:
-- Use only what the documents show. If something isn't there, use null. Never guess a credit score.
+- Use only what the documents show. If something isn't there, use an empty string for text and 0 for numbers (null only for the two balance fields). Never guess a credit score.
 - Do not record Social Security numbers, dates of birth, driver's license numbers, or bank account or routing numbers anywhere, including flags.
   The one ID to record is the business's federal tax ID (EIN), in application.ein. If the only tax ID shown is labeled SSN, or it is the owner's personal number, leave ein null.
 - statements: one entry per account per calendar month. full_month is false if the statement period covers only part of that month.
