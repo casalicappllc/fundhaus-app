@@ -6,7 +6,7 @@ import { FREQUENCIES, FREQ_SHORT, POSITION_KINDS, burden, weekly, monthly, lever
 
 export type Position = {
   id: string; deal_id: string; funder: string; kind: string; payment: number; frequency: string;
-  funded_amount: number | null; funded_on: string | null; status: string; notes: string | null; created_at: string;
+  funded_amount: number | null; funded_on: string | null; status: string; notes: string | null; created_at: string; detected?: boolean;
 };
 
 const cents = (n: number | null | undefined) => '$' + Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -80,7 +80,7 @@ export default function Positions({ deal, onCountChange, onLoaded }: { deal: Dea
       {rows.map(p => (
         <div className={`pos${p.status !== 'active' ? ' off' : ''}`} key={p.id}>
           <div className="pos-main">
-            <b>{p.funder} <span className="tag">{kindLabel(p.kind)}</span>{p.status !== 'active' && <span className="tag a">Paid off</span>}</b>
+            <b>{p.funder} <span className="tag">{kindLabel(p.kind)}</span>{p.detected && <span className="tag auto">From statements</span>}{p.status !== 'active' && <span className="tag a">Paid off</span>}</b>
             <span>{[p.funded_amount && 'funded ' + cents(p.funded_amount), p.funded_on && day(p.funded_on), p.notes].filter(Boolean).join(' · ')}</span>
           </div>
           <div className="pos-pay">

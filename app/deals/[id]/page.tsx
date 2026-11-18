@@ -3,11 +3,12 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { STAGES, money, type Deal, type Lender, type Submission } from '@/lib/types';
+import { STAGES, money, type Deal, type DealDocument, type Lender, type Submission } from '@/lib/types';
 import { matchAll, paperGrade } from '@/lib/matching';
 import DealForm from '@/components/DealForm';
 import Documents, { removeDealFiles } from '@/components/Documents';
 import Positions, { LEV_CLASS, type Position } from '@/components/Positions';
+import AutoFill from '@/components/AutoFill';
 import { burden, leverageBand } from '@/lib/positions';
 
 export default function DealPage() {
@@ -19,6 +20,8 @@ export default function DealPage() {
   const [err, setErr] = useState('');
   const [editing, setEditing] = useState(false);
   const [positions, setPositions] = useState<Position[] | null>(null);
+  const [docs, setDocs] = useState<DealDocument[] | null>(null);
+  const [posKey, setPosKey] = useState(0);
 
   const load = useCallback(async () => {
     const [d, l, s] = await Promise.all([
@@ -32,6 +35,8 @@ export default function DealPage() {
     setDeal(d.data as Deal); setLenders(l.data as Lender[]); setSubs(s.data as Submission[]);
   }, [id]);
   useEffect(() => { load(); }, [load]);
+  // After the documents are read: reload the deal and the positions list.
+  const afterRead = useCallback(() => { load(); setPosKey(k => k + 1); }, [load]);
 
   const run = async (q: PromiseLike<{ error: { message: string } | null }>) => {
     const { error } = await q; if (error) setErr(error.message); else { setErr(''); await load(); }
@@ -78,10 +83,11 @@ export default function DealPage() {
       {err && <div className="err" style={{ marginBottom: 12 }}>{err}</div>}
       <div className="grid2">
         <div>
+          <AutoFill deal={deal} docs={docs} onDone={afterRead} />
           <div className="card">
             <h3>Underwriting snapshot</h3>
             <div className="kv">
-              <div><span>Monthly revenue</span><b>{money(deal.monthly_revenue)}</b></div>
+              <div><span>Monthly revenue{deal.auto_summary?.avg_revenue != null && deal.auto_summary.avg_revenue === deal.monthly_revenue && ' · statement average'}</span><b>{money(deal.monthly_revenue)}</b></div>
               <div><span>Time in business</span><b>{(deal.tib_months / 12).toFixed(1)} yrs</b></div>
               <div><span>Owner FICO</span><b>{deal.fico}</b></div>
               <div><span>Open positions</span><b>{deal.positions}</b></div>
@@ -99,7 +105,7 @@ export default function DealPage() {
               </div>
             </div>
           </div>
-          <Positions deal={deal} onCountChange={load} onLoaded={setPositions} />
+          <Positions key={posKey} deal={deal} onCountChange={load} onLoaded={setPositions} />
           <div className="card">
             <h3>Lender match — {matches.filter(m => m.pass).length} of {matches.length} fit</h3>
             {matches.length === 0 && <p className="note">No lenders yet. <Link href="/lenders" style={{ textDecoration: 'underline' }}>Add your lender list</Link> and every deal is scored against it.</p>}
@@ -139,7 +145,7 @@ export default function DealPage() {
               {deal.notes && <div><span>Notes</span><b style={{ fontWeight: 500 }}>{deal.notes}</b></div>}
             </div>
           </div>
-          <Documents dealId={deal.id} />
+          <Documents dealId={deal.id} onChange={setDocs} />
           <form className="card" onSubmit={saveFunding}>
             <h3>Funding</h3>
             <div className="form">

@@ -24,7 +24,30 @@ export async function removeDealFiles(dealId: string) {
   return r.error ? r.error.message : null;
 }
 
-export default function Documents({ dealId }: { dealId: string }) {
+/** Uploads files to a deal as one document type. Returns a list of problems (empty if all went in). */
+export async function uploadDealFiles(dealId: string, files: File[], kind: string, progress?: (i: number, n: number) => void) {
+  const { data: u } = await supabase.auth.getUser();
+  const problems: string[] = [];
+  for (const [i, file] of files.entries()) {
+    const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+    const type = TYPES[ext];
+    if (!type) { problems.push(`${file.name}: only PDF, photo or spreadsheet files`); continue; }
+    if (file.size > MAX_BYTES) { problems.push(`${file.name}: over 25 MB`); continue; }
+    progress?.(i + 1, files.length);
+    const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+    const path = `${dealId}/${crypto.randomUUID()}-${safe}`;
+    const up = await supabase.storage.from(DOCS_BUCKET).upload(path, file, { contentType: type, upsert: false });
+    if (up.error) { problems.push(`${file.name}: ${up.error.message}`); continue; }
+    const row = await supabase.from('documents').insert({
+      deal_id: dealId, kind, file_name: file.name, storage_path: path, size_bytes: file.size, uploaded_by: u.user?.email ?? null,
+    });
+    if (row.error) { await supabase.storage.from(DOCS_BUCKET).remove([path]); problems.push(`${file.name}: ${row.error.message}`); }
+  }
+  return problems;
+}
+export const DOC_ACCEPT = ACCEPT;
+
+export default function Documents({ dealId, onChange }: { dealId: string; onChange?: (docs: DealDocument[]) => void }) {
   const [docs, setDocs] = useState<DealDocument[]>([]);
   const [kind, setKind] = useState('bank_statement');
   const [busy, setBusy] = useState('');
@@ -34,30 +57,14 @@ export default function Documents({ dealId }: { dealId: string }) {
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('documents').select('*').eq('deal_id', dealId).order('created_at', { ascending: false });
-    if (error) setErr(error.message); else setDocs(data as DealDocument[]);
-  }, [dealId]);
+    if (error) setErr(error.message); else { setDocs(data as DealDocument[]); onChange?.(data as DealDocument[]); }
+  }, [dealId, onChange]);
   useEffect(() => { load(); }, [load]);
 
   const upload = async (files: File[]) => {
     if (!files.length) return;
     setErr('');
-    const { data: u } = await supabase.auth.getUser();
-    const problems: string[] = [];
-    for (const [i, file] of files.entries()) {
-      const ext = (file.name.split('.').pop() ?? '').toLowerCase();
-      const type = TYPES[ext];
-      if (!type) { problems.push(`${file.name}: only PDF, photo or spreadsheet files`); continue; }
-      if (file.size > MAX_BYTES) { problems.push(`${file.name}: over 25 MB`); continue; }
-      setBusy(`Uploading ${i + 1} of ${files.length}…`);
-      const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
-      const path = `${dealId}/${crypto.randomUUID()}-${safe}`;
-      const up = await supabase.storage.from(DOCS_BUCKET).upload(path, file, { contentType: type, upsert: false });
-      if (up.error) { problems.push(`${file.name}: ${up.error.message}`); continue; }
-      const row = await supabase.from('documents').insert({
-        deal_id: dealId, kind, file_name: file.name, storage_path: path, size_bytes: file.size, uploaded_by: u.user?.email ?? null,
-      });
-      if (row.error) { await supabase.storage.from(DOCS_BUCKET).remove([path]); problems.push(`${file.name}: ${row.error.message}`); }
-    }
+    const problems = await uploadDealFiles(dealId, files, kind, (i, n) => setBusy(`Uploading ${i} of ${n}…`));
     setBusy(''); if (input.current) input.current.value = '';
     if (problems.length) setErr(problems.join(' · '));
     await load();

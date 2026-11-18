@@ -1,13 +1,16 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { INDUSTRIES, type Deal } from '@/lib/types';
+import { PLACEHOLDER_NAME } from '@/lib/autofill';
+import { uploadDealFiles, DOC_ACCEPT } from '@/components/Documents';
 
 const num = (v: FormDataEntryValue | null) => Math.max(0, Math.round(Number(String(v ?? '').replace(/[$,\s]/g, '')) || 0));
 const txt = (v: FormDataEntryValue | null) => String(v ?? '').trim() || null;
 
 export default function DealForm({ deal, onClose, onSaved }: { deal?: Deal; onClose: () => void; onSaved: (id: string) => void }) {
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<'docs' | 'type'>(deal ? 'type' : 'docs');
   const save = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); setBusy(true); setErr('');
     const f = new FormData(e.currentTarget);
@@ -27,8 +30,16 @@ export default function DealForm({ deal, onClose, onSaved }: { deal?: Deal; onCl
   const d = deal;
   return (
     <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <form className="modal" onSubmit={save}>
+      <div className="modal">
         <h2>{d ? 'Edit deal' : 'New deal'}</h2>
+        {!d && (
+          <div className="seg" role="tablist">
+            <button type="button" role="tab" aria-selected={mode === 'docs'} className={mode === 'docs' ? 'on' : ''} onClick={() => setMode('docs')}>From documents</button>
+            <button type="button" role="tab" aria-selected={mode === 'type'} className={mode === 'type' ? 'on' : ''} onClick={() => setMode('type')}>Type it in</button>
+          </div>
+        )}
+        {mode === 'docs' ? <FromDocs onClose={onClose} onSaved={onSaved} /> : (
+      <form onSubmit={save}>
         <div className="form">
           <div className="full"><label>Business name</label><input name="business" required defaultValue={d?.business} /></div>
           <div><label>Owner</label><input name="owner_name" defaultValue={d?.owner_name ?? ''} /></div>
@@ -51,6 +62,75 @@ export default function DealForm({ deal, onClose, onSaved }: { deal?: Deal; onCl
           <button className="btn solid" disabled={busy}>{busy ? 'Saving…' : 'Save deal'}</button>
         </div>
       </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** New deal from the application + bank statements: creates the deal, uploads the files,
+ *  and opens the deal page, where the documents are read and the deal fills itself in. */
+function FromDocs({ onClose, onSaved }: { onClose: () => void; onSaved: (id: string) => void }) {
+  const [app, setApp] = useState<File[]>([]);
+  const [stmts, setStmts] = useState<File[]>([]);
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const [made, setMade] = useState<string | null>(null);
+
+  const create = async () => {
+    setErr(''); setBusy('Creating deal…');
+    const { data, error } = await supabase.from('deals').insert({ business: PLACEHOLDER_NAME }).select('id').single();
+    if (error) { setBusy(''); setErr(error.message); return; }
+    const id = data.id as string;
+    const n = app.length + stmts.length;
+    const p1 = await uploadDealFiles(id, app, 'application', i => setBusy(`Uploading ${i} of ${n}…`));
+    const p2 = await uploadDealFiles(id, stmts, 'bank_statement', i => setBusy(`Uploading ${app.length + i} of ${n}…`));
+    setBusy('');
+    const problems = [...p1, ...p2];
+    if (problems.length) { setMade(id); setErr(`Some files didn't upload: ${problems.join(' · ')}. Open the deal and add them under Documents.`); return; }
+    onSaved(id);
+  };
+
+  return (
+    <>
+      <p className="note" style={{ marginBottom: 14 }}>Add the merchant&apos;s application and bank statements. The deal fills itself in — business details, monthly revenue, NSFs and current positions — and gets matched to your lenders.</p>
+      <Picker label="Application" files={app} setFiles={setApp} />
+      <Picker label="Bank statements" hint="last 3–4 months" files={stmts} setFiles={setStmts} />
+      {err && <div className="err">{err}</div>}
+      <div className="acts">
+        <button type="button" className="btn flat" onClick={onClose}>Cancel</button>
+        {made ? <button type="button" className="btn solid" onClick={() => onSaved(made)}>Open the deal</button>
+          : <button type="button" className="btn solid" disabled={!!busy || !app.length || !stmts.length} onClick={create}>
+            {busy || (!app.length ? 'Add the application' : !stmts.length ? 'Add bank statements' : 'Create deal')}</button>}
+      </div>
+    </>
+  );
+}
+
+function Picker({ label, hint, files, setFiles }: { label: string; hint?: string; files: File[]; setFiles: (f: File[]) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const add = (list: File[]) => {
+    const seen = new Set(files.map(f => f.name + f.size));
+    setFiles([...files, ...list.filter(f => !seen.has(f.name + f.size))]);
+    if (input.current) input.current.value = '';
+  };
+  return (
+    <div className={`pick${over ? ' on' : ''}`}
+      onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+      onDrop={e => { e.preventDefault(); setOver(false); add(Array.from(e.dataTransfer.files)); }}>
+      <div className="pick-h">
+        <div><b>{files.length ? '✓ ' : ''}{label}</b>{hint && <span> · {hint}</span>}</div>
+        <button type="button" className="btn sm flat" onClick={() => input.current?.click()}>{files.length ? 'Add more' : 'Choose files'}</button>
+        <input ref={input} type="file" multiple accept={DOC_ACCEPT} hidden onChange={e => add(Array.from(e.target.files ?? []))} />
+      </div>
+      {files.length === 0 ? <p className="note" style={{ fontSize: 12 }}>Or drag files here. PDF works best.</p>
+        : files.map((f, i) => (
+          <div className="pick-f" key={f.name + i}>
+            <span>{f.name}</span>
+            <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}>✕</button>
+          </div>
+        ))}
     </div>
   );
 }

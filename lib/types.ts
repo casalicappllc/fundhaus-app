@@ -11,6 +11,8 @@ export type Deal = {
   monthly_revenue: number; tib_months: number; fico: number; positions: number; nsf_90d: number;
   amount_requested: number; use_of_funds: string | null; stage: string;
   funded_amount: number | null; commission: number | null; notes: string | null; created_at: string;
+  auto_status?: 'running' | 'done' | 'failed' | null; auto_started_at?: string | null; auto_generated_at?: string | null;
+  auto_error?: string | null; auto_summary?: import('./autofill.ts').AutoSummary | null;
 };
 export type Submission = { id: string; deal_id: string; lender_id: string; status: string; created_at: string };
 export type DealDocument = {

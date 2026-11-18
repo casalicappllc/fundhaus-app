@@ -99,4 +99,30 @@ tbody tr{cursor:pointer}tbody tr:hover{background:rgba(255,255,255,.03)}
 .err{color:var(--bad);font-size:13px;margin-top:10px}
 .note{font-size:13px;color:var(--tx2)}
 .back{font-size:13px;color:var(--tx2);font-weight:600;display:inline-block;margin-bottom:8px}
+.seg{display:flex;gap:4px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:4px;margin-bottom:16px}
+.seg button{flex:1;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:700;color:var(--tx2)}
+.seg button.on{background:var(--card2);color:#fff}
+.pick{border:1px dashed var(--line2);border-radius:12px;padding:12px;margin-bottom:10px}
+.pick.on{border-color:#fff;background:rgba(255,255,255,.04)}
+.pick-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px}
+.pick-h b{font-size:14px}.pick-h .btn{white-space:nowrap}.pick-h span{font-size:12px;color:var(--tx3)}
+.pick-f{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:6px 0;border-top:1px solid var(--line)}
+.pick-f span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-f button{color:var(--tx3);padding:0 4px}.pick-f button:hover{color:var(--bad)}
+.reading{display:flex;gap:12px;align-items:flex-start}
+.reading b{font-size:14px}
+.spin{width:18px;height:18px;flex:none;margin-top:2px;border-radius:50%;border:2px solid var(--line2);border-top-color:#fff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.flags{list-style:none;margin-bottom:12px}
+.flags li{font-size:12.5px;color:var(--warn);padding:7px 10px;background:rgba(251,191,36,.08);border-radius:8px;margin-top:5px}
+.months{border-radius:12px;background:var(--card2)}
+.months table{font-size:12.5px}.months th{padding:10px 10px 7px}.months td{padding:8px 10px}
+.months tbody tr{cursor:default}.months tr.partial td{color:var(--tx3)}
+.months td small{display:block;font-size:10.5px}
+.months td.bad{color:var(--bad);font-weight:700}.months td.warn{color:var(--warn)}
+.months tfoot td{border-top:1px solid var(--line2);font-weight:700}
+.changed{margin-top:10px;font-size:12.5px;color:var(--tx2)}
+.changed summary{cursor:pointer;font-weight:700}
+.changed ul{margin:6px 0 0 18px}
+.tag.auto{background:rgba(255,255,255,.08);color:var(--tx)}
 @media(max-width:860px){.grid2,.form{grid-template-columns:1fr}.who span{display:none}}
