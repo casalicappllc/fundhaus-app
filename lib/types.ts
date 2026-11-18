@@ -4,6 +4,7 @@ export type Lender = {
   min_amount: number; max_amount: number;
   factor_low: number | null; factor_high: number | null; commission_pct: number | null;
   speed: string | null; excluded_industries: string[]; notes: string | null; active: boolean;
+  submit_emails?: string[];
 };
 export type Deal = {
   id: string; business: string; owner_name: string | null; phone: string | null; email: string | null;
@@ -16,7 +17,8 @@ export type Deal = {
   ein?: string | null; datamerch_status?: 'clear' | 'hit' | 'error' | 'no_ein' | null;
   datamerch_checked_at?: string | null; datamerch_result?: import('./datamerch.ts').DmResult | null;
 };
-export type Submission = { id: string; deal_id: string; lender_id: string; status: string; created_at: string };
+export type Submission = { id: string; deal_id: string; lender_id: string; status: string; created_at: string;
+  sent_at?: string | null; sent_to?: string[] | null; sent_by?: string | null; files_sent?: number | null };
 export type DealDocument = {
   id: string; deal_id: string; kind: string; file_name: string; storage_path: string;
   size_bytes: number; uploaded_by: string | null; created_at: string;

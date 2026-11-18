@@ -15,6 +15,8 @@ Built with Next.js and Supabase, deployed on Vercel.
 
 - DataMerch check: every deal is checked against DataMerch (the funder-reported default/fraud database) by EIN as soon as it has one — read from the application, or typed in under Edit — and again if the EIN changes. A red **On DataMerch** card lists each record with its category, note and who reported it, the deal and its pipeline card are flagged, and submitting to a lender asks you to confirm. A clean result shows **DM clear**. Server route in `app/api/deals/[id]/datamerch/route.ts`, response parsing in `lib/datamerch.ts` (tests in `lib/datamerch.test.ts`).
 
+- Send to lenders: **Send to lenders** on a deal opens a review screen — the lenders that fit (ticked if they have a submission email and haven't had it yet), the files to attach (application + bank statements by default), and an editable email. On **Send**, each lender gets its own email from the FundHaus mailbox with the files attached, the submission is recorded with who sent it and when, and the deal moves to Submitted. Lenders on DataMerch need an extra "send anyway" tick. Submission emails live on each lender (Lenders page; first is To, the rest CC). Route: `app/api/deals/[id]/submit/route.ts`; email text: `lib/submit.ts`.
+
 Not in yet: merchant-facing screens, merchant upload links, anything involving SSNs.
 
 ## Setup
@@ -24,9 +26,10 @@ Not in yet: merchant-facing screens, merchant upload links, anything involving S
 4. Supabase → Authentication → Sign In / Providers → turn off "Allow new users to sign up".
 5. Vercel → import this repository → add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (see `.env.example`) → Deploy.
 6. For deals that fill themselves in: create an API key at console.anthropic.com (add credit under Billing), then Vercel → Settings → Environment Variables → `ANTHROPIC_API_KEY` → Redeploy. Optional: `ANTHROPIC_MODEL` (default `claude-sonnet-5-5`).
+8. For sending to lenders: in Vercel add `SMTP_HOST`, `SMTP_PORT` (465), `SMTP_USER` (the mailbox, e.g. admin@assured-assets.net), `SMTP_PASS` (its password or app password) and optionally `SUBMIT_FROM` (e.g. `Assured Assets <admin@assured-assets.net>`) → Redeploy.
 7. For the DataMerch check: DataMerch → API credentials → add `DATAMERCH_AUTH_TOKEN` (Authentication Token) and `DATAMERCH_AUTH_KEY` (Authentication Key) in Vercel → Redeploy.
 
 ## Commands
 - `npm run dev` — run locally
-- `npm test` — matching, positions, auto-fill and DataMerch tests
+- `npm test` — matching, positions, auto-fill, DataMerch and submission tests
 - `npm run build` — production build

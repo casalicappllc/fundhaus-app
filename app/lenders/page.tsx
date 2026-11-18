@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { money, type Lender } from '@/lib/types';
+import { parseEmails } from '@/lib/submit';
 
 const num = (v: FormDataEntryValue | null) => Math.max(0, Math.round(Number(String(v ?? '').replace(/[$,\s]/g, '')) || 0));
 const dec = (v: FormDataEntryValue | null) => { const s = String(v ?? '').trim(); return s === '' || isNaN(Number(s)) ? null : Number(s); };
@@ -28,10 +29,11 @@ export default function Lenders() {
       </div>
       {lenders.length === 0 ? <div className="card note">No lenders yet. Add your first one — each lender&apos;s minimums become the rules deals are matched against.</div> :
       <div className="tablewrap"><table>
-        <thead><tr><th>Lender</th><th>Paper</th><th>Min revenue</th><th>Min time</th><th>Min FICO</th><th>Open positions</th><th>Range</th><th>Factor</th><th>Comm.</th><th>Excluded</th></tr></thead>
+        <thead><tr><th>Lender</th><th>Submit to</th><th>Paper</th><th>Min revenue</th><th>Min time</th><th>Min FICO</th><th>Open positions</th><th>Range</th><th>Factor</th><th>Comm.</th><th>Excluded</th></tr></thead>
         <tbody>{lenders.map(l => (
           <tr key={l.id} onClick={() => setEdit(l)} style={{ opacity: l.active ? 1 : .45 }}>
             <td><b>{l.name}</b>{!l.active && ' (paused)'}<small>{l.notes}</small></td>
+            <td>{l.submit_emails?.length ? <>{l.submit_emails[0]}{l.submit_emails.length > 1 && <small>+{l.submit_emails.length - 1} cc</small>}</> : <span className="warn-txt">none</span>}</td>
             <td>{l.paper ?? '—'}</td><td>{money(l.min_revenue)}</td><td>{l.min_tib_months} mo</td><td>{l.min_fico}</td><td>{l.max_positions == null ? `${l.min_positions}+` : `${l.min_positions}–${l.max_positions}`}</td>
             <td>{money(l.min_amount)}–{l.max_amount ? money(l.max_amount) : 'no cap'}</td>
             <td>{l.factor_low ? (l.factor_high && l.factor_high !== l.factor_low ? `${l.factor_low}–${l.factor_high}` : `${l.factor_low}`) : '—'}</td>
@@ -57,6 +59,7 @@ function LenderForm({ lender: l, onClose, onSaved }: { lender?: Lender; onClose:
       commission_pct: dec(f.get('commission_pct')), speed: String(f.get('speed') ?? '').trim() || null,
       excluded_industries: String(f.get('excluded') ?? '').split(',').map(s => s.trim()).filter(Boolean),
       notes: String(f.get('notes') ?? '').trim() || null, active: f.get('active') === 'on',
+      submit_emails: parseEmails(String(f.get('submit_emails') ?? '')),
     };
     const { error } = l ? await supabase.from('lenders').update(row).eq('id', l.id) : await supabase.from('lenders').insert(row);
     setBusy(false);
@@ -84,6 +87,7 @@ function LenderForm({ lender: l, onClose, onSaved }: { lender?: Lender; onClose:
           <div><label>Factor from</label><input name="factor_low" inputMode="decimal" placeholder="1.25" defaultValue={l?.factor_low ?? ''} /></div>
           <div><label>Factor to</label><input name="factor_high" inputMode="decimal" placeholder="1.45" defaultValue={l?.factor_high ?? ''} /></div>
           <div><label>Commission %</label><input name="commission_pct" inputMode="decimal" defaultValue={l?.commission_pct ?? ''} /></div>
+          <div className="full"><label>Submission emails (first is To, the rest CC)</label><input name="submit_emails" placeholder="underwriting@lender.com, cc@lender.com" defaultValue={(l?.submit_emails ?? []).join(', ')} /></div>
           <div className="full"><label>Speed</label><input name="speed" placeholder="Same day" defaultValue={l?.speed ?? ''} /></div>
           <div className="full"><label>Excluded industries (comma separated)</label><input name="excluded" placeholder="Cannabis, Trucking" defaultValue={l?.excluded_industries.join(', ')} /></div>
           <div className="full"><label>Notes</label><textarea name="notes" rows={2} defaultValue={l?.notes ?? ''} /></div>
