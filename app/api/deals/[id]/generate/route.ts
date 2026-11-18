@@ -78,7 +78,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       throw new Error(`Couldn't read ${!gotApp ? 'the application' : 'any bank statement'}: ${skipped.join('; ') || 'no readable file'}.`);
 
     const today = new Date();
-    blocks.push({ type: 'text', text: `Today is ${today.toISOString().slice(0, 10)}. Read the files above and call record_deal.` });
+    blocks.push({ type: 'text', text: `Today is ${today.toISOString().slice(0, 10)}. Read the files above and reply with the JSON.` });
 
     const ex = await askClaude(key, blocks);
 
@@ -109,8 +109,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
 async function askClaude(key: string, content: Block[]): Promise<Extraction> {
   const body = JSON.stringify({
-    model: MODEL, max_tokens: 8000, system: EXTRACT_PROMPT,
-    tools: [EXTRACT_TOOL], tool_choice: { type: 'tool', name: EXTRACT_TOOL.name },
+    model: MODEL, max_tokens: 16000, system: EXTRACT_PROMPT,
+    // JSON outputs: the reply is constrained to this schema (newer models don't allow forcing a tool).
+    output_config: { format: { type: 'json_schema', schema: EXTRACT_TOOL.input_schema } },
     messages: [{ role: 'user', content }],
   });
   for (let attempt = 1; ; attempt++) {
@@ -130,9 +131,10 @@ async function askClaude(key: string, content: Block[]): Promise<Extraction> {
       throw new Error(`The document reader couldn't finish: ${m}`);
     }
     if (j.stop_reason === 'max_tokens') throw new Error('Too much to read at once. Upload just the last 4 months of statements and try again.');
-    const use = (j.content ?? []).find((c: { type: string }) => c.type === 'tool_use');
-    if (!use?.input) throw new Error("The document reader didn't return any figures. Try again.");
-    const x = use.input as Partial<Extraction>;
+    if (j.stop_reason === 'refusal') throw new Error("The document reader declined to read these files. Check they're the application and bank statements.");
+    const text = (j.content ?? []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join('');
+    let x: Partial<Extraction>;
+    try { x = JSON.parse(text); } catch { throw new Error("The document reader didn't return any figures. Try again."); }
     return {
       application: x.application ?? ({} as Extraction['application']),
       statements: Array.isArray(x.statements) ? x.statements : [],
