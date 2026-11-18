@@ -15,7 +15,7 @@ const mo = (month: string, rev: number, nsf = 0, full = true, total = rev): Stat
 });
 const ex = (over: Partial<Extraction> = {}): Extraction => ({
   application: {
-    business_name: 'Sunrise Diner LLC', dba: null, owner_name: 'Maria Lopez', phone: '302-555-0100', email: 'Maria@Sunrise.com',
+    business_name: 'Sunrise Diner LLC', dba: null, ein: '82-1234567', owner_name: 'Maria Lopez', phone: '302-555-0100', email: 'Maria@Sunrise.com',
     city: 'Wilmington', state: 'DE', business_start_date: '2021-05', years_in_business: null, industry: 'Restaurant',
     amount_requested: 50000, use_of_funds: 'Equipment', credit_score: null,
   },
@@ -50,6 +50,7 @@ test('a blank deal fills itself from the documents', () => {
   const { update, flags } = planUpdate(blank, ex(), [], today);
   assert.equal(update.business, 'Sunrise Diner LLC');
   assert.equal(update.owner_name, 'Maria Lopez');
+  assert.equal(update.ein, '821234567');
   assert.equal(update.email, 'maria@sunrise.com');
   assert.equal(update.city, 'Wilmington, DE');
   assert.equal(update.industry, 'Restaurant');

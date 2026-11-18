@@ -1,6 +1,7 @@
 // Turns what the document reader found (application + bank statements) into deal fields and positions.
 // Pure functions only, so the math can be tested without the reader (see autofill.test.ts).
 import { INDUSTRIES, type Deal } from './types.ts';
+import { normEin } from './datamerch.ts';
 
 /** Business name a deal gets while its documents are being read. Treated as empty. */
 export const PLACEHOLDER_NAME = 'New deal — reading documents';
@@ -27,6 +28,7 @@ export type FoundPosition = {
 export type Extraction = {
   application: {
     business_name: string | null; dba: string | null; owner_name: string | null;
+    ein: string | null;                 // business federal tax ID (never the owner's SSN)
     phone: string | null; email: string | null; city: string | null; state: string | null;
     business_start_date: string | null; // YYYY-MM or YYYY-MM-DD
     years_in_business: number | null;
@@ -121,6 +123,7 @@ export function planUpdate(deal: Deal, ex: Extraction, existing: ExistingPositio
   const name = clean(a.business_name) ?? clean(a.dba) ?? clean(ex.statement_business_name);
   const dbaNote = a.business_name && a.dba && a.dba.trim().toLowerCase() !== a.business_name.trim().toLowerCase() ? `${a.business_name.trim()} DBA ${a.dba.trim()}` : null;
   fill('business', dbaNote ?? name, 'Business');
+  fill('ein', normEin(a.ein), 'EIN', v => `${String(v).slice(0, 2)}-${String(v).slice(2)}`);
   fill('owner_name', clean(a.owner_name), 'Owner');
   fill('phone', clean(a.phone), 'Phone');
   fill('email', clean(a.email)?.toLowerCase() ?? null, 'Email');
@@ -193,9 +196,10 @@ export const EXTRACT_TOOL = {
     properties: {
       application: {
         type: 'object', additionalProperties: false,
-        required: ['business_name', 'dba', 'owner_name', 'phone', 'email', 'city', 'state', 'business_start_date', 'years_in_business', 'industry', 'amount_requested', 'use_of_funds', 'credit_score'],
+        required: ['business_name', 'dba', 'ein', 'owner_name', 'phone', 'email', 'city', 'state', 'business_start_date', 'years_in_business', 'industry', 'amount_requested', 'use_of_funds', 'credit_score'],
         properties: {
-          business_name: { ...str, description: 'Legal business name' }, dba: str, owner_name: { ...str, description: 'Primary owner full name' },
+          business_name: { ...str, description: 'Legal business name' }, dba: str,
+          ein: { ...str, description: "The business's federal tax ID (EIN / FEIN / Tax ID), 9 digits. Never an SSN." }, owner_name: { ...str, description: 'Primary owner full name' },
           phone: str, email: str, city: str, state: { ...str, description: 'Two-letter state' },
           business_start_date: { ...str, description: 'YYYY-MM or YYYY-MM-DD' }, years_in_business: num,
           industry: { type: ['string', 'null'], enum: [...INDUSTRIES, null], description: 'Closest match from the list' },
@@ -249,7 +253,8 @@ The attached files are one merchant's funding application and business bank stat
 
 Rules:
 - Use only what the documents show. If something isn't there, use null. Never guess a credit score.
-- Do not record Social Security numbers, dates of birth, driver's license numbers, account or routing numbers, or tax IDs anywhere, including flags.
+- Do not record Social Security numbers, dates of birth, driver's license numbers, or bank account or routing numbers anywhere, including flags.
+  The one ID to record is the business's federal tax ID (EIN), in application.ein. If the only tax ID shown is labeled SSN, or it is the owner's personal number, leave ein null.
 - statements: one entry per account per calendar month. full_month is false if the statement period covers only part of that month.
   revenue_deposits excludes: transfers from the owner's other accounts, loan or MCA funding deposits, refunds, chargebacks reversed, returned deposits, and cash the owner moved in from personal accounts. Keep card settlements, customer payments, cash and check deposits from sales.
   nsf_count counts each NSF fee, returned item fee or overdraft fee event.

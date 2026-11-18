@@ -13,6 +13,8 @@ export type Deal = {
   funded_amount: number | null; commission: number | null; notes: string | null; created_at: string;
   auto_status?: 'running' | 'done' | 'failed' | null; auto_started_at?: string | null; auto_generated_at?: string | null;
   auto_error?: string | null; auto_summary?: import('./autofill.ts').AutoSummary | null;
+  ein?: string | null; datamerch_status?: 'clear' | 'hit' | 'error' | 'no_ein' | null;
+  datamerch_checked_at?: string | null; datamerch_result?: import('./datamerch.ts').DmResult | null;
 };
 export type Submission = { id: string; deal_id: string; lender_id: string; status: string; created_at: string };
 export type DealDocument = {

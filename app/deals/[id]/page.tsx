@@ -9,6 +9,7 @@ import DealForm from '@/components/DealForm';
 import Documents, { removeDealFiles } from '@/components/Documents';
 import Positions, { LEV_CLASS, type Position } from '@/components/Positions';
 import AutoFill from '@/components/AutoFill';
+import DataMerch from '@/components/DataMerch';
 import { burden, leverageBand } from '@/lib/positions';
 
 export default function DealPage() {
@@ -47,6 +48,7 @@ export default function DealPage() {
   const subFor = (lid: string) => subs.find(s => s.lender_id === lid);
   const setStage = (stage: string) => run(supabase.from('deals').update({ stage }).eq('id', deal.id));
   const submit = async (lid: string) => {
+    if (deal.datamerch_status === 'hit' && !window.confirm(`${deal.business} has records on DataMerch. Submit to this lender anyway?`)) return;
     await run(supabase.from('submissions').insert({ deal_id: deal.id, lender_id: lid }));
     if (['new', 'prequal'].includes(deal.stage)) await setStage('submitted');
   };
@@ -72,7 +74,7 @@ export default function DealPage() {
     <>
       <Link className="back" href="/">‹ Pipeline</Link>
       <div className="head">
-        <div><h1>{deal.business}</h1><p>{[deal.city, deal.industry, 'requesting ' + money(deal.amount_requested)].filter(Boolean).join(' · ')}</p></div>
+        <div><h1>{deal.business}{deal.datamerch_status === 'hit' && <span className="tag c dm-flag">On DataMerch</span>}</h1><p>{[deal.city, deal.industry, 'requesting ' + money(deal.amount_requested)].filter(Boolean).join(' · ')}</p></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <select style={{ width: 'auto' }} value={deal.stage} onChange={e => setStage(e.target.value)}>
             {STAGES.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
@@ -83,6 +85,7 @@ export default function DealPage() {
       {err && <div className="err" style={{ marginBottom: 12 }}>{err}</div>}
       <div className="grid2">
         <div>
+          <DataMerch deal={deal} onDone={load} />
           <AutoFill deal={deal} docs={docs} onDone={afterRead} />
           <div className="card">
             <h3>Underwriting snapshot</h3>

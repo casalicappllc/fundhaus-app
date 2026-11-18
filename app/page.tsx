@@ -71,6 +71,8 @@ export default function Pipeline() {
                       {d.positions > 0 && <span className="tag">{d.positions} pos</span>}
                       {band && <span className={`tag ${LEV_TAG[band]}`}>{Math.round(lev.pct!)}% lev</span>}
                       <span className={`tag ${fit ? 'a' : 'c'}`}>{fit} fit</span>
+                      {d.datamerch_status === 'hit' && <span className="tag c">DataMerch hit</span>}
+                      {d.datamerch_status === 'clear' && <span className="tag a">DM clear</span>}
                     </div>
                   </Link>
                 );
