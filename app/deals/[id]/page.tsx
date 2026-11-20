@@ -82,6 +82,7 @@ export default function DealPage() {
             {STAGES.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
           </select>
           <button className="btn flat" onClick={() => setEditing(true)}>Edit</button>
+          <button className="btn danger" onClick={remove}>Delete</button>
         </div>
       </div>
       {err && <div className="err" style={{ marginBottom: 12 }}>{err}</div>}
@@ -162,7 +163,6 @@ export default function DealPage() {
             </div>
             <button className="btn flat" style={{ marginTop: 13 }}>Save and mark funded</button>
           </form>
-          <div className="card"><button className="btn danger" onClick={remove}>Delete deal</button></div>
         </div>
       </div>
       {sending && <SendToLenders deal={deal} matches={matches} subs={subs} docs={docs ?? []}
