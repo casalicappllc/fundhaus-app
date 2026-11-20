@@ -12,10 +12,17 @@ export function parseEmails(s: string | null | undefined): string[] {
   return out;
 }
 
-/** First address is To, the rest are CC. */
+/** Copied on every email to every lender, so the team has a record of each submission. */
+export const ALWAYS_CC = ['funding@assured-assets.com'];
+
+/** First address is To, the rest are CC, plus ALWAYS_CC on every email. */
 export function recipients(l: Pick<Lender, 'submit_emails'>) {
-  const list = (l.submit_emails ?? []).filter(e => EMAIL.test(e));
-  return { to: list[0] ?? null, cc: list.slice(1) };
+  const list = (l.submit_emails ?? []).filter(e => EMAIL.test(e)).map(e => e.toLowerCase());
+  const to = list[0] ?? null;
+  if (!to) return { to, cc: [] as string[] };
+  const cc = list.slice(1);
+  for (const e of ALWAYS_CC) if (e !== to && !cc.includes(e)) cc.push(e);
+  return { to, cc };
 }
 
 /** Default subject and message. Each lender gets its own email, so lenders never see each other. */

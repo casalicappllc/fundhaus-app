@@ -15,7 +15,10 @@ test('emails: cleaned, lowercased, de-duplicated, junk dropped', () => {
 });
 
 test('first email is To, the rest CC', () => {
-  assert.deepEqual(recipients({ submit_emails: ['a@x.com', 'b@x.com', 'c@x.com'] }), { to: 'a@x.com', cc: ['b@x.com', 'c@x.com'] });
+  assert.deepEqual(recipients({ submit_emails: ['a@x.com', 'b@x.com', 'c@x.com'] }), { to: 'a@x.com', cc: ['b@x.com', 'c@x.com', 'funding@assured-assets.com'] });
+  assert.deepEqual(recipients({ submit_emails: ['submissions@avanza.nyc'] }), { to: 'submissions@avanza.nyc', cc: ['funding@assured-assets.com'] });
+  // Never copied twice, even if a lender's list already has it.
+  assert.deepEqual(recipients({ submit_emails: ['a@x.com', 'Funding@Assured-Assets.com'] }), { to: 'a@x.com', cc: ['funding@assured-assets.com'] });
   assert.deepEqual(recipients({ submit_emails: [] }), { to: null, cc: [] });
 });
 
