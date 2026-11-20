@@ -36,6 +36,11 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 70px}
 .col-h{display:flex;justify-content:space-between;margin:0 3px 10px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;color:var(--tx2)}
 .deal{display:block;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px;margin-bottom:8px}
 .deal:hover{border-color:#fff}
+.deal{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;cursor:grab}
+.deal.ghost{opacity:.35}
+.deal.lifted{cursor:grabbing;border-color:#fff;box-shadow:0 14px 34px rgba(0,0,0,.55);transform:rotate(1.5deg)}
+.col.over{border-color:#fff;background:var(--card2)}
+.board-hint{margin:0 0 10px}
 .deal b{display:block;font-size:13.5px;font-weight:700}
 .deal .meta{font-size:11.5px;color:var(--tx3);margin:2px 0 8px}
 .deal .amt{font-size:16px;font-weight:800}
