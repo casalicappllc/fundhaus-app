@@ -9,13 +9,15 @@ const mb = (b: number) => (b / 1048576).toFixed(1) + ' MB';
 const day = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 /** Review screen: pick lenders and files, check the email, then send. Nothing goes out until "Send" is clicked. */
-export default function SendToLenders({ deal, matches, subs, docs, activePositions, onClose, onSent }: {
+export default function SendToLenders({ deal, matches, subs, docs, activePositions, only, onClose, onSent }: {
   deal: Deal; matches: Match[]; subs: Submission[]; docs: DealDocument[]; activePositions: number;
+  /** Opened from one lender's row: start with just that lender ticked. */
+  only?: string;
   onClose: () => void; onSent: () => void;
 }) {
   const sentTo = (lid: string) => subs.find(s => s.lender_id === lid && s.sent_at);
   const draft = useMemo(() => draftEmail(deal, activePositions), [deal, activePositions]);
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(only ? [only] :
     matches.filter(m => m.pass && recipients(m.lender).to && !sentTo(m.lender.id)).map(m => m.lender.id)));
   const [files, setFiles] = useState<Set<string>>(() => new Set(docs.filter(d => d.kind === 'application' || d.kind === 'bank_statement').map(d => d.id)));
   const [subject, setSubject] = useState(draft.subject);

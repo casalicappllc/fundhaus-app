@@ -11,6 +11,7 @@ import Positions, { LEV_CLASS, type Position } from '@/components/Positions';
 import AutoFill from '@/components/AutoFill';
 import DataMerch from '@/components/DataMerch';
 import SendToLenders from '@/components/SendToLenders';
+import { recipients } from '@/lib/submit';
 import { burden, leverageBand } from '@/lib/positions';
 
 export default function DealPage() {
@@ -24,7 +25,8 @@ export default function DealPage() {
   const [positions, setPositions] = useState<Position[] | null>(null);
   const [docs, setDocs] = useState<DealDocument[] | null>(null);
   const [posKey, setPosKey] = useState(0);
-  const [sending, setSending] = useState(false);
+  // null = closed, 'all' = every lender that fits, otherwise the one lender id picked from its row.
+  const [sending, setSending] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [d, l, s] = await Promise.all([
@@ -115,11 +117,11 @@ export default function DealPage() {
           <div className="card">
             <div className="match-top">
               <h3>Lender match — {matches.filter(m => m.pass).length} of {matches.length} fit</h3>
-              {matches.length > 0 && <button className="btn sm solid" onClick={() => setSending(true)}>Send to lenders</button>}
+              {matches.length > 0 && <button className="btn send" onClick={() => setSending('all')}>✉ Send to lenders</button>}
             </div>
             {matches.length === 0 && <p className="note">No lenders yet. <Link href="/lenders" style={{ textDecoration: 'underline' }}>Add your lender list</Link> and every deal is scored against it.</p>}
             {matches.map(m => {
-              const s = subFor(m.lender.id); const fails = m.checks.filter(c => !c.ok);
+              const s = subFor(m.lender.id); const fails = m.checks.filter(c => !c.ok); const canEmail = !!recipients(m.lender).to;
               return (
                 <div className="match" key={m.lender.id}>
                   <div className="match-h"><b>{m.lender.name}</b>
@@ -129,7 +131,9 @@ export default function DealPage() {
                   <div className="tags">{m.checks.map(c => <span key={c.label} className={`tag ${c.ok ? 'a' : 'c'}`}>{c.ok ? '✓' : '✕'} {c.label}</span>)}</div>
                   {fails.length > 0 && <p className="fail" style={{ marginTop: 9, marginBottom: 0 }}>{fails.map(c => `${c.label}: ${c.got} (needs ${c.need})`).join(' · ')}</p>}
                   <div className="acts">
-                    {!s && <button className={`btn sm ${m.pass ? 'solid' : 'flat'}`} onClick={() => submit(m.lender.id)}>{m.pass ? 'Mark submitted' : 'Mark submitted anyway'}</button>}
+                    {!s && canEmail && <button className="btn sm send" onClick={() => setSending(m.lender.id)}>✉ Send{m.pass ? '' : ' anyway'}</button>}
+                    {!s && <button className="btn sm flat" onClick={() => submit(m.lender.id)}>{m.pass ? 'Mark submitted' : 'Mark submitted anyway'} (no email)</button>}
+                    {s && !s.sent_at && s.status === 'sent' && canEmail && <button className="btn sm send" onClick={() => setSending(m.lender.id)}>✉ Send email</button>}
                     {s && <>
                       <span className={`tag ${s.status === 'offer' ? 'a' : s.status === 'declined' ? 'c' : 'b'}`} style={{ padding: '7px 10px' }}>
                         {s.status === 'sent' ? (s.sent_at ? `Emailed ${new Date(s.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — waiting` : 'Submitted — waiting') : s.status === 'offer' ? 'Offer received' : 'Declined'}</span>
@@ -165,9 +169,9 @@ export default function DealPage() {
           </form>
         </div>
       </div>
-      {sending && <SendToLenders deal={deal} matches={matches} subs={subs} docs={docs ?? []}
+      {sending && <SendToLenders deal={deal} matches={matches} subs={subs} docs={docs ?? []} only={sending === 'all' ? undefined : sending}
         activePositions={positions ? positions.filter(p => p.status === 'active').length : deal.positions}
-        onClose={() => setSending(false)} onSent={load} />}
+        onClose={() => setSending(null)} onSent={load} />}
       {editing && <DealForm deal={deal} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />}
     </>
   );

@@ -24,6 +24,7 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 70px}
 .btn.danger{color:var(--bad);border:1px solid rgba(248,113,113,.35)}
 .btn[disabled]{opacity:.45;pointer-events:none}
 .btn.sm{padding:7px 11px;font-size:12.5px}
+.btn.send{background:#22C55E;color:#04130A;box-shadow:0 0 0 1px rgba(34,197,94,.5),0 4px 14px rgba(34,197,94,.25)}.btn.send:hover{background:#16A34A}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
 .card+.card{margin-top:14px}
 .card h3{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx2);font-weight:700;margin-bottom:14px}
