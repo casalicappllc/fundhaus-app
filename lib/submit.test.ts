@@ -31,6 +31,12 @@ test('draft leaves out what is unknown', () => {
   assert.ok(text.includes('admin@assured-assets.net'));
 });
 
+test('each lender is greeted by name', () => {
+  const { text } = draftEmail(deal, 5);
+  assert.ok(text.startsWith('Hi {lender} team,'));
+  assert.ok(personalize(text, 'Kapitus').startsWith('Hi Kapitus team,'));
+});
+
 test('subject shows the amount when there is one', () => {
   assert.equal(draftEmail({ ...deal, amount_requested: 150000 }, 5).subject, 'New submission: DUPAGE PAPER STOCK INC — $150,000 requested');
 });

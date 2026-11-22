@@ -41,7 +41,7 @@ export function draftEmail(d: Deal, activePositions: number) {
     line('Amount requested', d.amount_requested ? $(d.amount_requested) : null),
     line('Use of funds', d.use_of_funds),
   ].filter(Boolean).join('\n');
-  const text = `Hi,\n\nPlease review the deal below. The application and bank statements are attached.\n\n${facts}\n\nLet us know if you need anything else to get us an offer.\n\nThank you,\nAssured Assets\nadmin@assured-assets.net`;
+  const text = `Hi {lender} team,\n\nPlease review the deal below. The application and bank statements are attached.\n\n${facts}\n\nLet us know if you need anything else to get us an offer.\n\nThank you,\nAssured Assets\nadmin@assured-assets.net`;
   return { subject, text };
 }
 
