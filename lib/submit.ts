@@ -1,7 +1,21 @@
 // Building the email a deal goes out to lenders with. Pure functions, tested in submit.test.ts.
 import type { Deal, Lender } from './types.ts';
+import { FREQ_SHORT } from './positions.ts';
 
 const $ = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
+/** Exact dollars: whole amounts as $1,250, cents kept when there are any ($899.50). */
+const money = (n: number) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: Number(n) % 1 ? 2 : 0, maximumFractionDigits: 2 });
+
+export type FunderLine = { funder: string; payment: number; frequency: string };
+
+/** "Kapitus $1,250/day · Fox Funding $2,400/wk" — just the name when no payment is known yet. */
+export function balancesLine(active: FunderLine[]): string | null {
+  const parts = active
+    .filter(p => String(p.funder ?? '').trim())
+    .map(p => Number(p.payment) > 0 ? `${p.funder.trim()} ${money(p.payment)}${FREQ_SHORT[p.frequency] ?? ''}` : p.funder.trim());
+  return parts.length ? parts.join(' · ') : null;
+}
+
 const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[A-Za-z]{2,}$/;
 
 /** Cleans a typed list of emails ("a@x.com, b@y.com; c@z.com") into a lowercase, de-duplicated list. */
@@ -26,7 +40,7 @@ export function recipients(l: Pick<Lender, 'submit_emails'>) {
 }
 
 /** Default subject and message. Each lender gets its own email, so lenders never see each other. */
-export function draftEmail(d: Deal, activePositions: number) {
+export function draftEmail(d: Deal, activePositions: number, active: FunderLine[] = []) {
   const name = d.business;
   const subject = `New submission: ${name}${d.amount_requested ? ' — ' + $(d.amount_requested) + ' requested' : ''}`;
   const line = (label: string, v: string | null | false | undefined) => (v ? `${label}: ${v}` : null);
@@ -37,6 +51,7 @@ export function draftEmail(d: Deal, activePositions: number) {
     line('Time in business', d.tib_months ? `${(d.tib_months / 12).toFixed(1)} years` : null),
     line('Average monthly revenue', d.monthly_revenue ? $(d.monthly_revenue) : null),
     line('Open positions', String(activePositions)),
+    line('Balances', balancesLine(active)),
     line('NSFs, last 90 days', String(d.nsf_90d)),
     line('Amount requested', d.amount_requested ? $(d.amount_requested) : null),
     line('Use of funds', d.use_of_funds),

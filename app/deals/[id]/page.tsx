@@ -171,6 +171,7 @@ export default function DealPage() {
       </div>
       {sending && <SendToLenders deal={deal} matches={matches} subs={subs} docs={docs ?? []} only={sending === 'all' ? undefined : sending}
         activePositions={positions ? positions.filter(p => p.status === 'active').length : deal.positions}
+        funders={positions ? positions.filter(p => p.status === 'active') : []}
         onClose={() => setSending(null)} onSent={load} />}
       {editing && <DealForm deal={deal} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }} />}
     </>

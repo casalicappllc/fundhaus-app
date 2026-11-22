@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseEmails, recipients, draftEmail, personalize } from './submit.ts';
+import { parseEmails, recipients, draftEmail, personalize, balancesLine } from './submit.ts';
 import type { Deal } from './types.ts';
 
 const deal: Deal = {
@@ -43,4 +43,17 @@ test('subject shows the amount when there is one', () => {
 
 test('{lender} is filled in per lender', () => {
   assert.equal(personalize('Hi {lender} team', 'Kapitus'), 'Hi Kapitus team');
+});
+
+test('Balances lists each funder with its payment, right under Open positions', () => {
+  const funders = [
+    { funder: 'Kapitus', payment: 1250, frequency: 'daily' },
+    { funder: 'Fox Funding', payment: 2400, frequency: 'weekly' },
+    { funder: 'Pearl', payment: 899.5, frequency: 'daily' },
+    { funder: 'New One', payment: 0, frequency: 'daily' },
+  ];
+  assert.equal(balancesLine(funders), 'Kapitus $1,250/day · Fox Funding $2,400/wk · Pearl $899.50/day · New One');
+  const { text } = draftEmail(deal, 4, funders);
+  assert.ok(text.includes('Open positions: 4\nBalances: Kapitus $1,250/day'));
+  assert.ok(!draftEmail(deal, 0, []).text.includes('Balances'));
 });
