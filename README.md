@@ -17,6 +17,8 @@ Built with Next.js and Supabase, deployed on Vercel.
 
 - Send to lenders: **Send to lenders** on a deal opens a review screen — the lenders that fit (ticked if they have a submission email and haven't had it yet), the files to attach (application + bank statements by default), and an editable email. On **Send**, each lender gets its own email from the FundHaus mailbox with the files attached, the submission is recorded with who sent it and when, and the deal moves to Submitted. When the files add up to more than 18 MB (several accounts' statements), each lender gets them as "part 1 of N", "part 2 of N" … in one email thread, up to 4 emails (`packAttachments` in `lib/submit.ts`). Lenders on DataMerch need an extra "send anyway" tick. Submission emails live on each lender (Lenders page; first is To, the rest CC). Every email also CCs funding@assured-assets.com (`ALWAYS_CC` in `lib/submit.ts`). Route: `app/api/deals/[id]/submit/route.ts`; email text: `lib/submit.ts`.
 
+- Offers: an **Offers** box on each deal — lender, amount, buy rate, sell rate, term (number of daily or weekly payments), plus notes — with payback, spread and the daily/weekly payment worked out (`lib/offers.ts`, tests in `lib/offers.test.ts`). Adding an offer marks that lender's submission "Offer received" and moves the deal to Offers in.
+
 Not in yet: merchant-facing screens, merchant upload links, anything involving SSNs.
 
 ## Setup

@@ -11,6 +11,7 @@ import Positions, { LEV_CLASS, type Position } from '@/components/Positions';
 import AutoFill from '@/components/AutoFill';
 import DataMerch from '@/components/DataMerch';
 import SendToLenders from '@/components/SendToLenders';
+import Offers from '@/components/Offers';
 import { recipients } from '@/lib/submit';
 import { burden, leverageBand } from '@/lib/positions';
 
@@ -146,6 +147,7 @@ export default function DealPage() {
               );
             })}
           </div>
+          <Offers deal={deal} lenders={lenders} subs={subs} onChange={load} />
         </div>
         <div>
           <div className="card">
