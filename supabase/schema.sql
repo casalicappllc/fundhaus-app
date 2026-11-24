@@ -201,3 +201,7 @@ create index if not exists offers_deal_idx on offers (deal_id);
 alter table offers enable row level security;
 drop policy if exists offers_all on offers;
 create policy offers_all on offers for all to authenticated using (is_team()) with check (is_team());
+
+-- Bank statements are renamed by month and account ("November 2026 xxxx1234") when they're read.
+-- The name each file was uploaded with is kept here. Safe to run more than once.
+alter table documents add column if not exists original_name text;

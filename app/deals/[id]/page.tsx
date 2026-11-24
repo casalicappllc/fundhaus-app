@@ -160,7 +160,7 @@ export default function DealPage() {
               {deal.notes && <div><span>Notes</span><b style={{ fontWeight: 500 }}>{deal.notes}</b></div>}
             </div>
           </div>
-          <Documents dealId={deal.id} onChange={setDocs} />
+          <Documents key={'docs' + posKey} dealId={deal.id} onChange={setDocs} />
           <form className="card" onSubmit={saveFunding}>
             <h3>Funding</h3>
             <div className="form">

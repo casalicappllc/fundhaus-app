@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planUpdate, statementTotals, monthsSince, sameFunder, planBatches, mergeExtractions, PLACEHOLDER_NAME, type Extraction, type StatementMonth, type FoundPosition } from './autofill.ts';
+import { planUpdate, statementTotals, monthsSince, sameFunder, planBatches, mergeExtractions, statementName, planRenames, statementSortKey, PLACEHOLDER_NAME, type Extraction, type StatementMonth, type FoundPosition } from './autofill.ts';
 import type { Deal } from './types.ts';
 
 const today = new Date('2026-11-18T12:00:00Z');
@@ -165,4 +165,39 @@ test('a funder that stopped months before the latest statement is not active', (
 test('one batch passes through untouched', () => {
   const one = ex();
   assert.equal(mergeExtractions([one]), one);
+});
+
+// ---- Renaming statements ----
+
+test('statement names: month, year, last 4', () => {
+  assert.equal(statementName({ first_month: '2026-11', last_month: '2026-11', last4: '1234' }), 'November 2026 xxxx1234');
+  assert.equal(statementName({ first_month: '2026-09', last_month: '2026-11', last4: '1234' }), 'September–November 2026 xxxx1234');
+  assert.equal(statementName({ first_month: '2025-12', last_month: '2026-01', last4: '0042' }), 'December 2025–January 2026 xxxx0042');
+  assert.equal(statementName({ first_month: '2026-11', last_month: '', last4: '' }), 'November 2026');
+  assert.equal(statementName({ first_month: '2026-11', last_month: '2026-11', last4: '123456789' }), 'November 2026'); // never more than 4 digits
+  assert.equal(statementName({ first_month: '', last_month: '', last4: '1234' }), null);
+  assert.equal(statementName({ first_month: '2026-13', last_month: '2026-13', last4: '1234' }), null);
+});
+
+test('renames keep the extension, never clash, and skip what is already right', () => {
+  const docs = [
+    { id: 'a', file_name: 'stmt (1).PDF' }, { id: 'b', file_name: 'scan0042.pdf' }, { id: 'c', file_name: 'November 2026 xxxx1234.pdf' },
+    { id: 'd', file_name: 'mystery.pdf' }, { id: 'app', file_name: 'Application.pdf' },
+  ];
+  const f = (id: string, month: string, last4: string) => ({ id, ref: id, first_month: month, last_month: month, last4 });
+  const out = planRenames(docs, [f('a', '2026-10', '1234'), f('b', '2026-11', '1234'), f('c', '2026-11', '1234'), f('d', '', '')]);
+  assert.deepEqual(out, [
+    { id: 'a', file_name: 'October 2026 xxxx1234.pdf' },
+    { id: 'b', file_name: 'November 2026 xxxx1234.pdf' },
+    { id: 'c', file_name: 'November 2026 xxxx1234 (2).pdf' },   // same month and account uploaded twice
+  ]);
+  // Reading again changes nothing once names are settled.
+  const settled = [{ id: 'a', file_name: 'October 2026 xxxx1234.pdf' }, { id: 'b', file_name: 'November 2026 xxxx1234.pdf' }];
+  assert.deepEqual(planRenames(settled, [f('a', '2026-10', '1234'), f('b', '2026-11', '1234')]), []);
+});
+
+test('renamed statements sort by account, then date', () => {
+  const names = ['November 2026 xxxx9999.pdf', 'October 2026 xxxx1234.pdf', 'September 2026 xxxx9999.pdf', 'November 2026 xxxx1234.pdf'];
+  assert.deepEqual([...names].sort((a, b) => statementSortKey(a).localeCompare(statementSortKey(b))),
+    ['October 2026 xxxx1234.pdf', 'November 2026 xxxx1234.pdf', 'September 2026 xxxx9999.pdf', 'November 2026 xxxx9999.pdf']);
 });

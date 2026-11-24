@@ -25,7 +25,15 @@ export type FoundPosition = {
   still_active: boolean;
   funded_amount: number | null; funded_on: string | null;
 };
+/** What one bank-statement file covers, used to rename it "November 2026 xxxx1234". */
+export type StatementFile = {
+  ref: string;          // the tag the file was sent with, e.g. "S3"
+  first_month: string;  // YYYY-MM
+  last_month: string;   // YYYY-MM (same as first_month for a one-month statement)
+  last4: string;        // last 4 digits of the account number, "" if not shown
+};
 export type Extraction = {
+  files?: StatementFile[];
   application: {
     business_name: string | null; dba: string | null; owner_name: string | null;
     ein: string | null;                 // business federal tax ID (never the owner's SSN)
@@ -96,6 +104,51 @@ export function statementTotals(months: StatementMonth[]) {
   return { avg_revenue: avg('rev'), avg_deposits: avg('dep'), nsf_90d, months_used: use.length };
 }
 
+// ---- Renaming statements: "November 2026 xxxx1234" ---------------------------------------------
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ym = (m: string) => { const x = /^(\d{4})-(\d{1,2})$/.exec((m ?? '').trim()); const mo = x ? Number(x[2]) : 0; return x && mo >= 1 && mo <= 12 ? { y: Number(x[1]), mo } : null; };
+
+/** "November 2026 xxxx1234" (no extension). A file covering several months reads "September–November 2026 xxxx1234".
+ *  Without the account digits it is just the month and year; without a month there is no name (null). */
+export function statementName(f: Pick<StatementFile, 'first_month' | 'last_month' | 'last4'>): string | null {
+  const a = ym(f.first_month) ?? ym(f.last_month), b = ym(f.last_month) ?? a;
+  if (!a || !b) return null;
+  const when = a.y === b.y && a.mo === b.mo ? `${MONTHS[a.mo - 1]} ${a.y}`
+    : a.y === b.y ? `${MONTHS[a.mo - 1]}–${MONTHS[b.mo - 1]} ${b.y}`
+    : `${MONTHS[a.mo - 1]} ${a.y}–${MONTHS[b.mo - 1]} ${b.y}`;
+  const last4 = /^\d{4}$/.test((f.last4 ?? '').trim()) ? ` xxxx${f.last4.trim()}` : '';
+  return when + last4;
+}
+
+/** New names for the statements the reader could date. Keeps each file's extension, never gives two files
+ *  on the deal the same name (adds " (2)"), and leaves out files whose name wouldn't change. */
+export function planRenames(docs: { id: string; file_name: string }[], found: (StatementFile & { id: string })[]) {
+  const renaming = new Set(found.map(f => f.id));
+  const taken = new Set(docs.filter(d => !renaming.has(d.id)).map(d => d.file_name.toLowerCase()));
+  const out: { id: string; file_name: string }[] = [];
+  for (const f of found) {
+    const doc = docs.find(d => d.id === f.id);
+    const base = statementName(f);
+    if (!doc) continue;
+    if (!base) { taken.add(doc.file_name.toLowerCase()); continue; }
+    const dot = doc.file_name.lastIndexOf('.');
+    const ext = dot > 0 ? doc.file_name.slice(dot).toLowerCase() : '';
+    let name = base + ext;
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} (${n})${ext}`;
+    taken.add(name.toLowerCase());
+    if (name !== doc.file_name) out.push({ id: doc.id, file_name: name });
+  }
+  return out;
+}
+
+/** Sort key that keeps one account's statements together, oldest first, once they've been renamed. */
+export function statementSortKey(fileName: string) {
+  const x = /^([A-Z][a-z]+)(?:[^\d]*?) (\d{4}) xxxx(\d{4})/.exec(fileName);
+  const mo = x ? MONTHS.indexOf(x[1]) + 1 : 0;
+  return x && mo ? `~${x[3]}-${x[2]}-${String(mo).padStart(2, '0')}` : fileName.toLowerCase();
+}
+
 // ---- Many statements: read in batches, then merge -------------------------------------------
 
 /** Splits statements into batches the reader can take in one request: at most `maxFiles` files and
@@ -164,7 +217,7 @@ export function mergeExtractions(parts: Extraction[]): Extraction {
 
   const flags = [...new Set(parts.flatMap(p => p.flags))];
   const statement_business_name = parts.map(p => clean(p.statement_business_name)).find(Boolean) ?? null;
-  return { application, statements, positions, flags, statement_business_name };
+  return { application, statements, positions, flags, statement_business_name, files: parts.flatMap(p => p.files ?? []) };
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/\b(llc|inc|corp|capital|funding|financial|group|co)\b/g, '').replace(/[^a-z0-9]/g, '');
@@ -266,8 +319,20 @@ export const EXTRACT_TOOL = {
   input_schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['application', 'statements', 'positions', 'flags', 'statement_business_name'],
+    required: ['application', 'statements', 'positions', 'flags', 'statement_business_name', 'files'],
     properties: {
+      files: {
+        type: 'array', description: 'One entry per bank statement file, in the order given',
+        items: {
+          type: 'object', additionalProperties: false, required: ['ref', 'first_month', 'last_month', 'last4'],
+          properties: {
+            ref: { ...str, description: 'The tag in the file\'s label, e.g. "S3"' },
+            first_month: { ...str, description: 'YYYY-MM of the first statement month in the file (the month most of that statement period falls in)' },
+            last_month: { ...str, description: 'YYYY-MM of the last statement month in the file; same as first_month for a one-month statement' },
+            last4: { ...str, description: 'Last 4 digits of the account number printed on the statement, digits only. Empty if not shown.' },
+          },
+        },
+      },
       application: {
         type: 'object', additionalProperties: false,
         required: ['business_name', 'dba', 'ein', 'owner_name', 'phone', 'email', 'city', 'state', 'business_start_date', 'years_in_business', 'industry', 'amount_requested', 'use_of_funds', 'credit_score'],
@@ -327,7 +392,8 @@ The attached files are one merchant's funding application and business bank stat
 
 Rules:
 - Use only what the documents show. If something isn't there, use an empty string for text and 0 for numbers (null only for the two balance fields). Never guess a credit score.
-- Do not record Social Security numbers, dates of birth, driver's license numbers, or bank account or routing numbers anywhere, including flags.
+- Do not record Social Security numbers, dates of birth, driver's license numbers, or full bank account or routing numbers anywhere, including flags. The last 4 digits of an account number are fine (files[].last4 and account labels).
+- files: one entry for each bank statement file, using the tag in its label (e.g. S3). A statement dated Oct 31–Nov 28 is November.
   The one ID to record is the business's federal tax ID (EIN), in application.ein. If the only tax ID shown is labeled SSN, or it is the owner's personal number, leave ein null.
 - statements: one entry per account per calendar month. Merchants often have several business accounts — record each one separately, with a label that tells them apart.
   full_month is false if the statement period covers only part of that month.

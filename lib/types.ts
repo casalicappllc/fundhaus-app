@@ -22,6 +22,7 @@ export type Submission = { id: string; deal_id: string; lender_id: string; statu
 export type DealDocument = {
   id: string; deal_id: string; kind: string; file_name: string; storage_path: string;
   size_bytes: number; uploaded_by: string | null; created_at: string;
+  original_name?: string | null; // the name it was uploaded with, once a statement has been renamed
 };
 export const DOC_KINDS: [string, string][] = [
   ['bank_statement', 'Bank statement'], ['application', 'Application'], ['id', "Driver's license / ID"],

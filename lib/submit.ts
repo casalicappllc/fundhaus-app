@@ -1,6 +1,7 @@
 // Building the email a deal goes out to lenders with. Pure functions, tested in submit.test.ts.
 import type { Deal, Lender } from './types.ts';
 import { FREQ_SHORT } from './positions.ts';
+import { statementSortKey } from './autofill.ts';
 
 const $ = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 /** Exact dollars: whole amounts as $1,250, cents kept when there are any ($899.50). */
@@ -77,7 +78,7 @@ const KIND_ORDER: Record<string, number> = { application: 0, bank_statement: 1 }
  *  in any email on their own come back in `tooBig`. */
 export function packAttachments<T extends { kind: string; file_name: string; size_bytes: number }>(docs: T[], max = MAX_EMAIL_BYTES) {
   const sorted = [...docs].sort((a, b) =>
-    (KIND_ORDER[a.kind] ?? 2) - (KIND_ORDER[b.kind] ?? 2) || a.file_name.localeCompare(b.file_name, undefined, { numeric: true }));
+    (KIND_ORDER[a.kind] ?? 2) - (KIND_ORDER[b.kind] ?? 2) || statementSortKey(a.file_name).localeCompare(statementSortKey(b.file_name), undefined, { numeric: true }));
   const tooBig = sorted.filter(d => Number(d.size_bytes) > max);
   const parts: T[][] = [];
   let cur: T[] = [], bytes = 0;

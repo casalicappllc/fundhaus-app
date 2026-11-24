@@ -112,7 +112,7 @@ export default function Documents({ dealId, onChange }: { dealId: string; onChan
         <div className="doc" key={d.id}>
           <div className="doc-main">
             <button className="doc-name" onClick={() => open(d, false)} title="Open">{d.file_name}</button>
-            <span>{size(d.size_bytes)} · {when(d.created_at)}{d.uploaded_by ? ' · ' + d.uploaded_by : ''}</span>
+            <span>{size(d.size_bytes)} · {when(d.created_at)}{d.uploaded_by ? ' · ' + d.uploaded_by : ''}{d.original_name && d.original_name !== d.file_name ? ' · was ' + d.original_name : ''}</span>
           </div>
           <select className="doc-kind" value={d.kind} onChange={e => setDocKind(d, e.target.value)} aria-label={`Type of ${d.file_name}`}>
             {DOC_KINDS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}

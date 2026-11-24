@@ -3,7 +3,7 @@
 // goes through the signed-in user's own Supabase session, so the team-only rules still apply.
 import { createClient } from '@supabase/supabase-js';
 import { DOCS_BUCKET, type Deal, type DealDocument } from '@/lib/types';
-import { EXTRACT_PROMPT, EXTRACT_TOOL, mergeExtractions, planBatches, planUpdate, type AutoSummary, type Extraction } from '@/lib/autofill';
+import { EXTRACT_PROMPT, EXTRACT_TOOL, mergeExtractions, planBatches, planRenames, planUpdate, statementSortKey, type AutoSummary, type Extraction } from '@/lib/autofill';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -46,7 +46,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (docsQ.error) return fail(500, docsQ.error.message);
   const docs = docsQ.data as DealDocument[];
   const apps = docs.filter(x => x.kind === 'application');
-  const stmts = docs.filter(x => x.kind === 'bank_statement').sort((a, b) => a.file_name.localeCompare(b.file_name));
+  const stmts = docs.filter(x => x.kind === 'bank_statement').sort((a, b) => statementSortKey(a.file_name).localeCompare(statementSortKey(b.file_name), undefined, { numeric: true }));
   if (!apps.length || !stmts.length) return fail(400, 'Upload the application and at least one bank statement first.');
 
   // Claim the deal so two people opening it at once don't both read it. A run older than 5 minutes is treated as dead.
@@ -79,9 +79,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!appDocs.length || !stmtDocs.length)
       throw new Error(`Couldn't read ${!appDocs.length ? 'the application' : 'any bank statement'}: ${skipped.join('; ') || 'no readable file'}.`);
 
+    const refOf = new Map(stmtDocs.map((x, i) => [x.id, `S${i + 1}`])); // tag each statement so it can be renamed afterwards
     const toBlocks = async (doc: DealDocument): Promise<Block[] | null> => {
       const ext = (doc.file_name.split('.').pop() ?? '').toLowerCase();
-      const label = `${doc.kind === 'application' ? 'Application' : 'Bank statement'}: ${doc.file_name}`;
+      const label = doc.kind === 'application' ? `Application: ${doc.file_name}` : `Bank statement [${refOf.get(doc.id)}]: ${doc.file_name}`;
       const file = await db.storage.from(DOCS_BUCKET).download(doc.storage_path);
       if (file.error || !file.data) { skipped.push(`${doc.file_name} — couldn't open the stored file`); return null; }
       const buf = Buffer.from(await file.data.arrayBuffer());
@@ -133,6 +134,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const ex = mergeExtractions(results.flat());
     if (!ex.statements.length) throw new Error('The document reader found no statement months in these files. Check they are bank statements.');
 
+    // Rename each statement the reader could date: "November 2026 xxxx1234.pdf". The first name is kept in original_name.
+    const idOf = new Map([...refOf].map(([docId, ref]) => [ref, docId]));
+    const found = (ex.files ?? []).flatMap(f => { const docId = idOf.get(String(f.ref ?? '').trim().toUpperCase()); return docId ? [{ ...f, id: docId }] : []; });
+    const allNames = await db.from('documents').select('id, file_name').eq('deal_id', id);
+    let renamed = 0;
+    for (const r of planRenames(allNames.data ?? stmtDocs, found.filter((f, i) => found.findIndex(x => x.id === f.id) === i))) {
+      const doc = stmtDocs.find(x => x.id === r.id)!;
+      const up = await db.from('documents').update({ file_name: r.file_name, original_name: doc.original_name ?? doc.file_name }).eq('id', r.id);
+      if (!up.error) renamed++;
+    }
+
     const existing = await db.from('positions').select('funder, status').eq('deal_id', id);
     if (existing.error) throw new Error(existing.error.message);
     const plan = planUpdate(deal, ex, existing.data ?? [], today);
@@ -144,7 +156,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const summary: AutoSummary = {
       months: [...ex.statements].sort((a, b) => a.month.localeCompare(b.month)),
       avg_revenue: plan.totals.avg_revenue, avg_deposits: plan.totals.avg_deposits, nsf_90d: plan.totals.nsf_90d,
-      flags: plan.flags, changed: plan.changed, skipped_files: skipped, files_read: read,
+      flags: plan.flags, changed: renamed ? [...plan.changed, `Renamed ${renamed} bank statement${renamed > 1 ? 's' : ''} by month and account`] : plan.changed, skipped_files: skipped, files_read: read,
     };
     const up = await db.from('deals').update({
       ...plan.update, auto_status: 'done', auto_generated_at: new Date().toISOString(), auto_error: null, auto_summary: summary,
@@ -192,6 +204,7 @@ async function askClaude(key: string, content: Block[]): Promise<Extraction> {
       positions: Array.isArray(x.positions) ? x.positions : [],
       flags: Array.isArray(x.flags) ? x.flags.map(String) : [],
       statement_business_name: x.statement_business_name ?? null,
+      files: Array.isArray(x.files) ? x.files : [],
     };
   }
 }
