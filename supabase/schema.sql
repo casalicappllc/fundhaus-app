@@ -205,3 +205,6 @@ create policy offers_all on offers for all to authenticated using (is_team()) wi
 -- Bank statements are renamed by month and account ("November 2026 xxxx1234") when they're read.
 -- The name each file was uploaded with is kept here. Safe to run more than once.
 alter table documents add column if not exists original_name text;
+
+-- The payment a lender quoted on an offer (daily or weekly, per term_freq). Safe to run more than once.
+alter table offers add column if not exists payment numeric(12,2) check (payment > 0);

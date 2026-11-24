@@ -4,6 +4,7 @@ export type Offer = {
   id: string; deal_id: string; lender_id: string | null; lender_name: string;
   amount: number; buy_rate: number | null; sell_rate: number | null;
   term_freq: 'daily' | 'weekly' | null; term_count: number | null; // e.g. 120 daily payments, or 26 weekly
+  payment?: number | null; // the daily or weekly payment the lender quoted; worked out from the term when blank
   notes: string | null; created_by: string | null; created_at: string;
 };
 
@@ -25,16 +26,17 @@ export function rateProblem(label: string, r: number | null): string | null {
  *  payback = amount x sell rate (what the merchant repays; buy rate if no sell rate yet)
  *  spread  = amount x (sell rate - buy rate), the broker's markup.
  *  payment = payback / number of payments. */
-export function offerMath(o: Pick<Offer, 'amount' | 'buy_rate' | 'sell_rate'> & Partial<Pick<Offer, 'term_count'>>) {
+export function offerMath(o: Pick<Offer, 'amount' | 'buy_rate' | 'sell_rate'> & Partial<Pick<Offer, 'term_count' | 'payment'>>) {
   const amount = Number(o.amount) || 0;
   const buy = o.buy_rate == null ? null : Number(o.buy_rate), sell = o.sell_rate == null ? null : Number(o.sell_rate);
   const rate = sell ?? buy;
   const payback = rate ? Math.round(amount * rate) : null;
   const points = buy != null && sell != null ? Math.round((sell - buy) * 1000) / 10 : null; // 1.25 -> 1.35 = 10 points
   const spread = points != null ? Math.round(amount * (sell! - buy!)) : null;
-  // Each daily or weekly payment = payback spread evenly over the number of payments.
-  const payment = payback && o.term_count ? Math.round((payback / o.term_count) * 100) / 100 : null;
-  return { payback, points, spread, payment };
+  // The lender's quoted payment wins; otherwise payback spread evenly over the number of payments.
+  const quoted = o.payment != null && Number(o.payment) > 0 ? Math.round(Number(o.payment) * 100) / 100 : null;
+  const payment = quoted ?? (payback && o.term_count ? Math.round((payback / o.term_count) * 100) / 100 : null);
+  return { payback, points, spread, payment, estimated: quoted == null && payment != null };
 }
 
 /** "120 daily", "26 weekly", just "Daily", or "—". */

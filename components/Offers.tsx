@@ -17,7 +17,7 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('offers').select('*').eq('deal_id', deal.id).order('created_at');
     if (error) { setErr(/offers/.test(error.message) && /find|exist/i.test(error.message) ? 'Offers need a one-time database update (supabase/migration-2026-11-24-offers.sql).' : error.message); return; }
-    setRows((data ?? []).map(o => ({ ...o, amount: Number(o.amount), buy_rate: o.buy_rate == null ? null : Number(o.buy_rate), sell_rate: o.sell_rate == null ? null : Number(o.sell_rate) })) as Offer[]);
+    setRows((data ?? []).map(o => ({ ...o, amount: Number(o.amount), buy_rate: o.buy_rate == null ? null : Number(o.buy_rate), sell_rate: o.sell_rate == null ? null : Number(o.sell_rate), payment: o.payment == null ? null : Number(o.payment) })) as Offer[]);
   }, [deal.id]);
   useEffect(() => { load(); }, [load]);
 
@@ -28,6 +28,7 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
     const amount = parseNum(f.get('amount')), buy = parseNum(f.get('buy_rate')), sell = parseNum(f.get('sell_rate'));
     if (!name) { setErr('Add the lender.'); return; }
     if (!amount) { setErr('Add the offer amount.'); return; }
+    const pay = parseNum(f.get('payment'));
     const freq = f.get('term_freq') === 'weekly' ? 'weekly' as const : 'daily' as const;
     const countRaw = String(f.get('term_count') ?? '').trim();
     const count = countRaw ? Math.round(parseNum(countRaw) ?? 0) : null;
@@ -38,7 +39,7 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
     const lender = lenders.find(l => l.name.trim().toLowerCase() === name.toLowerCase());
     const row = {
       lender_id: lender?.id ?? null, lender_name: lender?.name ?? name, amount: Math.round(amount * 100) / 100,
-      buy_rate: buy, sell_rate: sell, term_freq: freq, term_count: count, notes: String(f.get('notes') ?? '').trim() || null,
+      buy_rate: buy, sell_rate: sell, term_freq: freq, term_count: count, payment: pay == null ? null : Math.round(pay * 100) / 100, notes: String(f.get('notes') ?? '').trim() || null,
     };
     const isNew = editing === 'new';
     const { data: u } = await supabase.auth.getUser();
@@ -66,11 +67,11 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
   return (
     <div className="card">
       <h3>Offers{rows.length > 0 && ` — ${rows.length}`}</h3>
-      {rows.length === 0 && !editing && <p className="note">No offers yet. When a lender comes back, add the amount, buy rate, sell rate and term (daily or weekly) here.</p>}
+      {rows.length === 0 && !editing && <p className="note">No offers yet. When a lender comes back, add the amount, buy rate, sell rate, term (daily or weekly) and payment here.</p>}
       {rows.length > 0 && (
         <div className="tablewrap">
           <table>
-            <thead><tr><th>Lender</th><th>Amount</th><th>Buy rate</th><th>Sell rate</th><th>Term</th><th>Payback</th><th>Spread</th><th /></tr></thead>
+            <thead><tr><th>Lender</th><th>Amount</th><th>Buy rate</th><th>Sell rate</th><th>Term</th><th>Payment</th><th>Payback</th><th>Spread</th><th /></tr></thead>
             <tbody>
               {rows.map(o => {
                 const m = offerMath(o);
@@ -80,7 +81,8 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
                     <td><b>{whole(o.amount)}</b></td>
                     <td>{showRate(o.buy_rate)}</td>
                     <td>{showRate(o.sell_rate)}</td>
-                    <td>{showTerm(o)}{m.payment != null && <small>{cents(m.payment)}{o.term_freq === 'weekly' ? '/wk' : '/day'}</small>}</td>
+                    <td>{showTerm(o)}</td>
+                    <td>{m.payment == null ? '—' : <><b>{cents(m.payment)}{o.term_freq === 'weekly' ? '/wk' : '/day'}</b>{m.estimated && <small>worked out</small>}</>}</td>
                     <td>{m.payback == null ? '—' : whole(m.payback)}</td>
                     <td>{m.spread == null ? '—' : <>{whole(m.spread)}<small>{m.points} pts</small></>}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
@@ -94,7 +96,7 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
           </table>
         </div>
       )}
-      {rows.some(o => o.buy_rate != null) && <p className="note" style={{ fontSize: 12, marginTop: 8 }}>Payback = amount × sell rate (buy rate if there&apos;s no sell rate yet). Spread = amount × (sell − buy). Payment = payback ÷ number of payments.</p>}
+      {rows.some(o => o.buy_rate != null) && <p className="note" style={{ fontSize: 12, marginTop: 8 }}>Payback = amount × sell rate (buy rate if there&apos;s no sell rate yet). Spread = amount × (sell − buy). A payment marked &ldquo;worked out&rdquo; is payback ÷ number of payments — type the lender&apos;s payment to replace it.</p>}
       {editing ? (
         <form className="pos-form" onSubmit={save} key={cur?.id ?? 'new'}>
           <div className="form">
@@ -108,6 +110,7 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
                 <input name="term_count" inputMode="numeric" defaultValue={cur?.term_count ?? ''} placeholder="# of payments, e.g. 120" style={{ flex: 1, minWidth: 0 }} />
                 <select name="term_freq" defaultValue={cur?.term_freq ?? 'daily'} aria-label="Daily or weekly" style={{ width: 'auto' }}><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
               </div></div>
+            <div><label>Payment ($, per day or week)</label><input name="payment" inputMode="decimal" defaultValue={cur?.payment ?? ''} placeholder="blank = worked out from the term" /></div>
             <div><label>Notes</label><input name="notes" defaultValue={cur?.notes ?? ''} placeholder="optional — stips, fees…" /></div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
