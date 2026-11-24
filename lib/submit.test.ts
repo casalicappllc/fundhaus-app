@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseEmails, recipients, draftEmail, personalize, balancesLine } from './submit.ts';
+import { parseEmails, recipients, draftEmail, personalize, balancesLine, packAttachments, partEmail } from './submit.ts';
 import type { Deal } from './types.ts';
 
 const deal: Deal = {
@@ -56,4 +56,37 @@ test('Balances lists each funder with its payment, right under Open positions', 
   const { text } = draftEmail(deal, 4, funders);
   assert.ok(text.includes('Open positions: 4\nBalances: Kapitus $1,250/day'));
   assert.ok(!draftEmail(deal, 0, []).text.includes('Balances'));
+});
+
+// ---- Splitting a big submission across emails ----
+const MB = 1048576;
+const doc = (file_name: string, kind: string, mb: number) => ({ file_name, kind, size_bytes: mb * MB });
+
+test('a normal deal goes in one email, application first', () => {
+  const { parts, tooBig } = packAttachments([doc('Chase Oct.pdf', 'bank_statement', 2), doc('ID.jpg', 'id', 1), doc('App.pdf', 'application', 1), doc('Chase Sep.pdf', 'bank_statement', 2)]);
+  assert.equal(tooBig.length, 0);
+  assert.deepEqual(parts.map(p => p.map(d => d.file_name)), [['App.pdf', 'Chase Oct.pdf', 'Chase Sep.pdf', 'ID.jpg']]);
+});
+
+test('twelve statements over 18 MB are split into parts, none over the limit', () => {
+  const docs = [doc('App.pdf', 'application', 1), ...Array.from({ length: 12 }, (_, i) => doc(`Statement ${i + 1}.pdf`, 'bank_statement', 3))];
+  const { parts, tooBig } = packAttachments(docs);
+  assert.equal(tooBig.length, 0);
+  assert.equal(parts.length, 3);
+  assert.equal(parts[0][0].file_name, 'App.pdf');
+  assert.equal(parts.flat().length, 13);                    // nothing dropped
+  assert.deepEqual(parts[0].slice(1, 3).map(d => d.file_name), ['Statement 1.pdf', 'Statement 2.pdf']); // 1, 2 ... not 1, 10, 11
+  for (const p of parts) assert.ok(p.reduce((n, d) => n + d.size_bytes, 0) <= 18 * MB);
+});
+
+test('a file too big for any email is reported, not sent', () => {
+  const { parts, tooBig } = packAttachments([doc('App.pdf', 'application', 1), doc('Scan.pdf', 'bank_statement', 22)]);
+  assert.deepEqual(tooBig.map(d => d.file_name), ['Scan.pdf']);
+  assert.equal(parts.flat().length, 1);
+});
+
+test('follow-up emails say which part they are', () => {
+  const e = partEmail('New submission: Sunrise Diner', 'Sunrise Diner', 2, 3, 5);
+  assert.equal(e.subject, 'New submission: Sunrise Diner (part 2 of 3)');
+  assert.match(e.text, /Part 2 of 3 for Sunrise Diner: 5 more files attached/);
 });

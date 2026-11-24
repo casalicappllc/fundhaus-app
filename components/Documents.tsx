@@ -104,10 +104,10 @@ export default function Documents({ dealId, onChange }: { dealId: string; onChan
         </select>
         <button className="btn solid" disabled={!!busy} onClick={() => input.current?.click()}>{busy || 'Upload files'}</button>
         <input ref={input} type="file" multiple accept={ACCEPT} hidden onChange={e => upload(Array.from(e.target.files ?? []))} />
-        <p className="note">Or drag files here. PDF, photo or spreadsheet, up to 25 MB each. Only your team can open them.</p>
+        <p className="note">Or drag files here — pick as many as you need at once. PDF, photo or spreadsheet, up to 25 MB each. Only your team can open them.</p>
       </div>
       {err && <div className="err">{err}</div>}
-      {docs.length === 0 && <p className="note" style={{ marginTop: 12 }}>No documents yet. Most lenders want the last 3–4 months of business bank statements.</p>}
+      {docs.length === 0 && <p className="note" style={{ marginTop: 12 }}>No documents yet. Most lenders want the last 3–4 months of business bank statements — for every business account the merchant has.</p>}
       {docs.map(d => (
         <div className="doc" key={d.id}>
           <div className="doc-main">

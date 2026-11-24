@@ -96,6 +96,77 @@ export function statementTotals(months: StatementMonth[]) {
   return { avg_revenue: avg('rev'), avg_deposits: avg('dep'), nsf_90d, months_used: use.length };
 }
 
+// ---- Many statements: read in batches, then merge -------------------------------------------
+
+/** Splits statements into batches the reader can take in one request: at most `maxFiles` files and
+ *  `maxBytes` each. Keeps the given order (name order keeps one bank's statements together).
+ *  A single file bigger than `maxBytes` still gets a batch of its own. */
+export function planBatches<T extends { size_bytes: number }>(files: T[], maxBytes: number, maxFiles: number): T[][] {
+  const out: T[][] = [];
+  let cur: T[] = [], bytes = 0;
+  for (const f of files) {
+    const b = Number(f.size_bytes) || 0;
+    if (cur.length && (cur.length >= maxFiles || bytes + b > maxBytes)) { out.push(cur); cur = []; bytes = 0; }
+    cur.push(f); bytes += b;
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
+const earlier = (a: string | null, b: string | null) => (!a ? b : !b ? a : a < b ? a : b);
+const monthIndex = (m: string) => { const x = /^(\d{4})-(\d{2})/.exec(m); return x ? Number(x[1]) * 12 + Number(x[2]) : null; };
+
+/** Combines what the reader found in each batch into one result.
+ *  - Application: first batch that has each field (the application is read with the first batch).
+ *  - Statements: all of them; the exact same account-month read twice is kept once.
+ *  - Positions: one per funder across batches. When there was more than one batch, a funder only counts as
+ *    still active if its debits reach the latest month (or the one before) on any statement. */
+export function mergeExtractions(parts: Extraction[]): Extraction {
+  if (parts.length === 1) return parts[0];
+  const application = { ...parts[0].application };
+  for (const p of parts.slice(1)) for (const k of Object.keys(application) as (keyof Extraction['application'])[]) {
+    const v = application[k];
+    if ((v == null || v === '' || v === 0) && p.application?.[k] != null && p.application[k] !== '' && p.application[k] !== 0)
+      (application as Record<string, unknown>)[k] = p.application[k];
+  }
+
+  const statements: StatementMonth[] = [];
+  const seen = new Set<string>();
+  for (const p of parts) for (const s of p.statements) {
+    const key = `${(s.account ?? '').toLowerCase().trim()}|${s.month}|${Math.round(s.total_deposits || 0)}`;
+    if (seen.has(key)) continue;
+    seen.add(key); statements.push(s);
+  }
+
+  const positions: FoundPosition[] = [];
+  for (const p of parts) for (const pos of p.positions) {
+    const i = positions.findIndex(x => sameFunder(x.funder, pos.funder));
+    if (i < 0) { positions.push({ ...pos }); continue; }
+    const x = positions[i];
+    const newer = (pos.last_seen ?? '') > (x.last_seen ?? '');
+    positions[i] = {
+      ...x,
+      funder: x.funder.length >= pos.funder.length ? x.funder : pos.funder,
+      kind: x.kind === 'other' ? pos.kind : x.kind,
+      payment: newer ? pos.payment : x.payment, frequency: newer ? pos.frequency : x.frequency,
+      first_seen: earlier(x.first_seen, pos.first_seen), last_seen: later(x.last_seen, pos.last_seen),
+      still_active: x.still_active || pos.still_active,
+      funded_amount: Math.max(x.funded_amount ?? 0, pos.funded_amount ?? 0) || null,
+      funded_on: later(x.funded_on, pos.funded_on),
+    };
+  }
+  const latest = statements.map(s => monthIndex(s.month)).filter((n): n is number => n != null).reduce((a, b) => Math.max(a, b), 0);
+  for (const p of positions) {
+    const last = p.last_seen ? monthIndex(p.last_seen) : null;
+    if (p.still_active && latest && last != null && last < latest - 1) p.still_active = false;
+  }
+
+  const flags = [...new Set(parts.flatMap(p => p.flags))];
+  const statement_business_name = parts.map(p => clean(p.statement_business_name)).find(Boolean) ?? null;
+  return { application, statements, positions, flags, statement_business_name };
+}
+
 const norm = (s: string) => s.toLowerCase().replace(/\b(llc|inc|corp|capital|funding|financial|group|co)\b/g, '').replace(/[^a-z0-9]/g, '');
 export function sameFunder(a: string, b: string) {
   const x = norm(a), y = norm(b);
@@ -218,7 +289,7 @@ export const EXTRACT_TOOL = {
           required: ['month', 'account', 'full_month', 'total_deposits', 'revenue_deposits', 'deposit_count', 'nsf_count', 'negative_days', 'ending_balance', 'avg_daily_balance'],
           properties: {
             month: { type: 'string', description: 'YYYY-MM' },
-            account: { ...str, description: 'Bank and account type, e.g. "Chase business checking". Never the account number.' },
+            account: { ...str, description: 'Bank and account type, e.g. "Chase business checking". If two accounts would get the same label, add the last 4 digits ("Chase business checking ··1234"). Never the full account number.' },
             full_month: { type: 'boolean' },
             total_deposits: { type: 'number' },
             revenue_deposits: { type: 'number', description: 'Deposits minus transfers from the owner\'s other accounts, loan/MCA funding, refunds, reversals and returned items' },
@@ -258,8 +329,9 @@ Rules:
 - Use only what the documents show. If something isn't there, use an empty string for text and 0 for numbers (null only for the two balance fields). Never guess a credit score.
 - Do not record Social Security numbers, dates of birth, driver's license numbers, or bank account or routing numbers anywhere, including flags.
   The one ID to record is the business's federal tax ID (EIN), in application.ein. If the only tax ID shown is labeled SSN, or it is the owner's personal number, leave ein null.
-- statements: one entry per account per calendar month. full_month is false if the statement period covers only part of that month.
-  revenue_deposits excludes: transfers from the owner's other accounts, loan or MCA funding deposits, refunds, chargebacks reversed, returned deposits, and cash the owner moved in from personal accounts. Keep card settlements, customer payments, cash and check deposits from sales.
+- statements: one entry per account per calendar month. Merchants often have several business accounts — record each one separately, with a label that tells them apart.
+  full_month is false if the statement period covers only part of that month.
+  revenue_deposits excludes: transfers between the merchant's own accounts (including accounts not in these files), loan or MCA funding deposits, refunds, chargebacks reversed, returned deposits, and cash the owner moved in from personal accounts. Keep card settlements, customer payments, cash and check deposits from sales.
   nsf_count counts each NSF fee, returned item fee or overdraft fee event.
 - positions: look for recurring debits (daily or weekly ACH with the same or nearly the same amount, or monthly loan payments) to funders and lenders, e.g. names containing Capital, Funding, Advance, Financial, OnDeck, Kabbage, PayPal Working Capital, Square Loan, Shopify Capital, SBA loans, equipment finance. Do not count rent, payroll, utilities, card processing fees, insurance or ordinary vendor bills.
   If a funder's debits stop before the last 10 days of the latest statement, still_active is false.

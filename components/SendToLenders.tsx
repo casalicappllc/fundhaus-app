@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Deal, DealDocument, Submission } from '@/lib/types';
 import type { Match } from '@/lib/matching';
-import { draftEmail, recipients, type FunderLine } from '@/lib/submit';
+import { draftEmail, packAttachments, recipients, MAX_EMAIL_PARTS, type FunderLine } from '@/lib/submit';
 
 const mb = (b: number) => (b / 1048576).toFixed(1) + ' MB';
 const day = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -40,7 +40,9 @@ export default function SendToLenders({ deal, matches, subs, docs, activePositio
   const unchecked = deal.datamerch_status !== 'clear' && !hit;
   const list = showAll ? matches : matches.filter(m => m.pass || picked.has(m.lender.id));
   const hidden = matches.length - list.length;
-  const ready = picked.size > 0 && hasApp && hasStmt && bytes <= 18 * 1048576 && subject.trim() && text.trim() && (!hit || anyway);
+  const { parts, tooBig } = packAttachments(chosenDocs);
+  const fits = !tooBig.length && parts.length <= MAX_EMAIL_PARTS;
+  const ready = picked.size > 0 && hasApp && hasStmt && fits && subject.trim() && text.trim() && (!hit || anyway);
 
   const send = async () => {
     setBusy(true); setErr('');
@@ -106,7 +108,9 @@ export default function SendToLenders({ deal, matches, subs, docs, activePositio
           ))}
         </div>
         {(!hasApp || !hasStmt) && <p className="err">Attach the application and at least one bank statement.</p>}
-        {bytes > 18 * 1048576 && <p className="err">Over 18 MB — untick some files so the email gets through.</p>}
+        {tooBig.length > 0 && <p className="err">{tooBig.map(d => d.file_name).join(', ')} {tooBig.length > 1 ? 'are' : 'is'} over 18 MB — too big for any email. Untick {tooBig.length > 1 ? 'them' : 'it'} or upload a smaller copy.</p>}
+        {!tooBig.length && parts.length > MAX_EMAIL_PARTS && <p className="err">That&apos;s {parts.length} emails per lender — untick some files so it fits in {MAX_EMAIL_PARTS}.</p>}
+        {fits && parts.length > 1 && <p className="note" style={{ fontSize: 12, marginTop: 6 }}>Over 18 MB, so each lender gets {parts.length} emails in one thread — &ldquo;part 1 of {parts.length}&rdquo; with the application and your message, then the rest of the statements.</p>}
 
         <h4>Email</h4>
         <div className="form" style={{ gridTemplateColumns: '1fr' }}>

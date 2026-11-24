@@ -95,9 +95,9 @@ function FromDocs({ onClose, onSaved }: { onClose: () => void; onSaved: (id: str
 
   return (
     <>
-      <p className="note" style={{ marginBottom: 14 }}>Add the merchant&apos;s application and bank statements. The deal fills itself in — business details, monthly revenue, NSFs and current positions — and gets matched to your lenders.</p>
+      <p className="note" style={{ marginBottom: 14 }}>Add the merchant&apos;s application and bank statements — all of their business accounts, as many files as it takes. The deal fills itself in — business details, monthly revenue, NSFs and current positions — and gets matched to your lenders.</p>
       <Picker label="Application" files={app} setFiles={setApp} />
-      <Picker label="Bank statements" hint="last 3–4 months" files={stmts} setFiles={setStmts} />
+      <Picker label="Bank statements" hint="last 3–4 months of every business account" files={stmts} setFiles={setStmts} />
       {err && <div className="err">{err}</div>}
       <div className="acts">
         <button type="button" className="btn flat" onClick={onClose}>Cancel</button>

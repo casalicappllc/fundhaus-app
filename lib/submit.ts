@@ -62,3 +62,39 @@ export function draftEmail(d: Deal, activePositions: number, active: FunderLine[
 
 /** Lender name and deal name dropped into a message the broker may have edited. */
 export const personalize = (text: string, lenderName: string) => text.replace(/\{lender\}/g, lenderName);
+
+// ---- Big submissions: several accounts' statements rarely fit in one email --------------------
+
+/** Most mail servers cap a message at ~25 MB once encoded, so each email carries at most this much. */
+export const MAX_EMAIL_BYTES = 18 * 1024 * 1024;
+/** More parts than this and lenders stop reading; ask the broker to trim instead. */
+export const MAX_EMAIL_PARTS = 4;
+
+const KIND_ORDER: Record<string, number> = { application: 0, bank_statement: 1 };
+
+/** Splits the attachments into emails of at most `max` bytes each: application first, then statements
+ *  in name order (so each bank's months stay together), then everything else. Files that won't fit
+ *  in any email on their own come back in `tooBig`. */
+export function packAttachments<T extends { kind: string; file_name: string; size_bytes: number }>(docs: T[], max = MAX_EMAIL_BYTES) {
+  const sorted = [...docs].sort((a, b) =>
+    (KIND_ORDER[a.kind] ?? 2) - (KIND_ORDER[b.kind] ?? 2) || a.file_name.localeCompare(b.file_name, undefined, { numeric: true }));
+  const tooBig = sorted.filter(d => Number(d.size_bytes) > max);
+  const parts: T[][] = [];
+  let cur: T[] = [], bytes = 0;
+  for (const d of sorted) {
+    const b = Number(d.size_bytes) || 0;
+    if (b > max) continue;
+    if (cur.length && bytes + b > max) { parts.push(cur); cur = []; bytes = 0; }
+    cur.push(d); bytes += b;
+  }
+  if (cur.length) parts.push(cur);
+  return { parts, tooBig };
+}
+
+/** Subject and message for part 2, 3 ... of a submission (part 1 is the broker's own email). */
+export function partEmail(subject: string, business: string, part: number, of: number, files: number) {
+  return {
+    subject: `${subject} (part ${part} of ${of})`,
+    text: `Hi {lender} team,\n\nPart ${part} of ${of} for ${business}: ${files} more file${files === 1 ? '' : 's'} attached (bank statements were too large for one email).\n\nThank you,\nAssured Assets\nadmin@assured-assets.net`,
+  };
+}

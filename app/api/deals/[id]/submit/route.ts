@@ -1,15 +1,15 @@
 // Emails a deal to the lenders the broker picked: one email per lender (lenders never see each other),
 // with the application and bank statements attached, sent from the FundHaus mailbox over SMTP.
+// Too much for one email (several accounts) goes as part 1 of N, part 2 of N ..., threaded together.
 // Database and file access go through the signed-in user's own Supabase session (team-only rules apply).
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 import { DOCS_BUCKET, type Deal, type DealDocument, type Lender, type Submission } from '@/lib/types';
-import { personalize, recipients } from '@/lib/submit';
+import { MAX_EMAIL_PARTS, packAttachments, partEmail, personalize, recipients } from '@/lib/submit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-const MAX_ATTACH_BYTES = 18 * 1024 * 1024; // most mail servers cap a message at ~25 MB once encoded
 const fail = (status: number, error: string) => Response.json({ error }, { status });
 
 type Body = { lender_ids?: string[]; subject?: string; text?: string; doc_ids?: string[] };
@@ -57,15 +57,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     : all.filter(x => x.kind === 'application' || x.kind === 'bank_statement');
   if (!wanted.some(x => x.kind === 'application') || !wanted.some(x => x.kind === 'bank_statement'))
     return fail(400, 'Attach the application and at least one bank statement before sending.');
-  const total = wanted.reduce((n, x) => n + Number(x.size_bytes || 0), 0);
-  if (total > MAX_ATTACH_BYTES) return fail(400, `The attachments add up to ${(total / 1048576).toFixed(1)} MB, over the 18 MB an email can safely carry. Untick some files and try again.`);
+  // Over 18 MB (several accounts' statements) goes out as part 1 of N, part 2 of N ..., threaded together.
+  const { parts, tooBig } = packAttachments(wanted);
+  if (tooBig.length) return fail(400, `${tooBig.map(x => x.file_name).join(', ')} ${tooBig.length > 1 ? 'are' : 'is'} over 18 MB, too big for any email. Untick ${tooBig.length > 1 ? 'them' : 'it'} or upload a smaller copy.`);
+  if (parts.length > MAX_EMAIL_PARTS) return fail(400, `These files would need ${parts.length} emails per lender. Untick some so they fit in ${MAX_EMAIL_PARTS}.`);
 
-  const attachments: { filename: string; content: Buffer }[] = [];
+  const files = new Map<string, Buffer>();
   for (const doc of wanted) {
     const f = await db.storage.from(DOCS_BUCKET).download(doc.storage_path);
     if (f.error || !f.data) return fail(500, `Couldn't open ${doc.file_name}: ${f.error?.message ?? 'missing file'}`);
-    attachments.push({ filename: doc.file_name, content: Buffer.from(await f.data.arrayBuffer()) });
+    files.set(doc.id, Buffer.from(await f.data.arrayBuffer()));
   }
+  const attach = (group: DealDocument[]) => group.map(doc => ({ filename: doc.file_name, content: files.get(doc.id)! }));
 
   const mail = nodemailer.createTransport({ host: SMTP_HOST, port, secure: port === 465, auth: { user: SMTP_USER, pass: SMTP_PASS } });
   try { await mail.verify(); }
@@ -75,23 +78,36 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   for (const lender of lenders) {
     const { to, cc } = recipients(lender);
     if (!to) { results.push({ lender: lender.name, ok: false, error: 'no submission email on file' }); continue; }
-    try {
-      await mail.sendMail({
-        from, to, cc: cc.length ? cc : undefined, replyTo: from,
-        subject: personalize(subject, lender.name), text: personalize(text, lender.name), attachments,
-      });
-      const row = { status: 'sent', sent_at: new Date().toISOString(), sent_to: [to, ...cc], sent_by: who, files_sent: attachments.length };
-      const existing = subs.find(x => x.lender_id === lender.id);
-      const w = existing
-        ? await db.from('submissions').update(row).eq('id', existing.id)
-        : await db.from('submissions').insert({ ...row, deal_id: id, lender_id: lender.id });
-      results.push(w.error ? { lender: lender.name, ok: true, error: `sent, but not recorded: ${w.error.message}` } : { lender: lender.name, ok: true });
-    } catch (err) {
-      results.push({ lender: lender.name, ok: false, error: err instanceof Error ? err.message : String(err) });
+    let sentParts = 0, firstId: string | undefined, problem: string | undefined;
+    for (const [i, group] of parts.entries()) {
+      const extra = i === 0 ? null : partEmail(personalize(subject, lender.name), deal.business, i + 1, parts.length, group.length);
+      try {
+        const info = await mail.sendMail({
+          from, to, cc: cc.length ? cc : undefined, replyTo: from,
+          subject: extra ? extra.subject : personalize(subject, lender.name) + (parts.length > 1 ? ` (part 1 of ${parts.length})` : ''),
+          text: personalize(extra ? extra.text : text, lender.name),
+          attachments: attach(group),
+          ...(firstId ? { inReplyTo: firstId, references: [firstId] } : {}),
+        });
+        if (i === 0) firstId = info.messageId;
+        sentParts++;
+      } catch (err) {
+        problem = err instanceof Error ? err.message : String(err);
+        break;
+      }
     }
+    if (!sentParts) { results.push({ lender: lender.name, ok: false, error: problem }); continue; }
+    const partial = sentParts < parts.length ? `only ${sentParts} of ${parts.length} emails went out (${problem}) — resend to this lender` : undefined;
+    const row = { status: 'sent', sent_at: new Date().toISOString(), sent_to: [to, ...cc], sent_by: who, files_sent: parts.slice(0, sentParts).flat().length };
+    const existing = subs.find(x => x.lender_id === lender.id);
+    const w = existing
+      ? await db.from('submissions').update(row).eq('id', existing.id)
+      : await db.from('submissions').insert({ ...row, deal_id: id, lender_id: lender.id });
+    const note = [partial, w.error && `sent, but not recorded: ${w.error.message}`].filter(Boolean).join('; ');
+    results.push(note ? { lender: lender.name, ok: !partial, error: note } : { lender: lender.name, ok: true });
   }
 
   if (results.some(r => r.ok) && ['new', 'prequal'].includes(deal.stage))
     await db.from('deals').update({ stage: 'submitted' }).eq('id', id);
-  return Response.json({ results, files: attachments.length });
+  return Response.json({ results, files: wanted.length, emails_per_lender: parts.length });
 }

@@ -3,16 +3,22 @@
 // goes through the signed-in user's own Supabase session, so the team-only rules still apply.
 import { createClient } from '@supabase/supabase-js';
 import { DOCS_BUCKET, type Deal, type DealDocument } from '@/lib/types';
-import { EXTRACT_PROMPT, EXTRACT_TOOL, planUpdate, type AutoSummary, type Extraction } from '@/lib/autofill';
+import { EXTRACT_PROMPT, EXTRACT_TOOL, mergeExtractions, planBatches, planUpdate, type AutoSummary, type Extraction } from '@/lib/autofill';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
-const MAX_TOTAL_BYTES = 22 * 1024 * 1024; // Anthropic takes up to 32 MB per request; files grow by a third when encoded
+// Several accounts x several months is a lot of pages, so statements are read in batches (in parallel) and merged.
+const MAX_BATCH_BYTES = 20 * 1024 * 1024; // Anthropic takes up to 32 MB per request; files grow by a third when encoded
+const MAX_BATCH_FILES = 6;                 // statements per request, to stay well under the page limit
+const MAX_STATEMENTS = 40;                 // e.g. 5 accounts x 8 months
+const PARALLEL = 3;
 const IMAGE: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 
 const fail = (status: number, error: string) => Response.json({ error }, { status });
+/** The request was too many pages or tokens for one read; the caller splits the batch and tries again. */
+class TooMuch extends Error {}
 
 type Block =
   | { type: 'text'; text: string }
@@ -53,34 +59,79 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!claim.data?.length) return fail(409, 'These documents are already being read. Give it a minute.');
 
   try {
-    // Build the request: application first, then statements in name order.
-    const blocks: Block[] = [];
+    // Application first, then statements in name order (which keeps one bank's statements together).
     const skipped: string[] = [];
-    let total = 0, read = 0, gotApp = false, gotStmt = false;
-    for (const doc of [...apps, ...stmts]) {
+    const readable = (doc: DealDocument) => {
       const ext = (doc.file_name.split('.').pop() ?? '').toLowerCase();
-      const label = `${doc.kind === 'application' ? 'Application' : 'Bank statement'}: ${doc.file_name}`;
       if (ext !== 'pdf' && ext !== 'csv' && !IMAGE[ext]) {
         skipped.push(`${doc.file_name} — ${ext === 'heic' || ext === 'heif' ? 'iPhone photo format; save it as JPG or PDF' : 'this file type can’t be read; upload a PDF'}`);
-        continue;
+        return false;
       }
-      if (total + doc.size_bytes > MAX_TOTAL_BYTES) { skipped.push(`${doc.file_name} — too much to read in one go; the rest were read`); continue; }
-      const file = await db.storage.from(DOCS_BUCKET).download(doc.storage_path);
-      if (file.error || !file.data) { skipped.push(`${doc.file_name} — couldn't open the stored file`); continue; }
-      const buf = Buffer.from(await file.data.arrayBuffer());
-      total += buf.length; read++;
-      if (doc.kind === 'application') gotApp = true; else gotStmt = true;
-      if (ext === 'pdf') blocks.push({ type: 'document', title: label, source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') } });
-      else if (ext === 'csv') blocks.push({ type: 'text', text: `${label}\n${buf.toString('utf8').slice(0, 200_000)}` });
-      else { blocks.push({ type: 'text', text: label }); blocks.push({ type: 'image', source: { type: 'base64', media_type: IMAGE[ext], data: buf.toString('base64') } }); }
+      if (doc.size_bytes > MAX_BATCH_BYTES) { skipped.push(`${doc.file_name} — too big to read (over 20 MB); save a smaller PDF`); return false; }
+      return true;
+    };
+    const appDocs = apps.filter(readable);
+    let stmtDocs = stmts.filter(readable);
+    if (stmtDocs.length > MAX_STATEMENTS) {
+      skipped.push(...stmtDocs.slice(MAX_STATEMENTS).map(x => `${x.file_name} — only ${MAX_STATEMENTS} statements are read at a time`));
+      stmtDocs = stmtDocs.slice(0, MAX_STATEMENTS);
     }
-    if (!gotApp || !gotStmt)
-      throw new Error(`Couldn't read ${!gotApp ? 'the application' : 'any bank statement'}: ${skipped.join('; ') || 'no readable file'}.`);
+    if (!appDocs.length || !stmtDocs.length)
+      throw new Error(`Couldn't read ${!appDocs.length ? 'the application' : 'any bank statement'}: ${skipped.join('; ') || 'no readable file'}.`);
+
+    const toBlocks = async (doc: DealDocument): Promise<Block[] | null> => {
+      const ext = (doc.file_name.split('.').pop() ?? '').toLowerCase();
+      const label = `${doc.kind === 'application' ? 'Application' : 'Bank statement'}: ${doc.file_name}`;
+      const file = await db.storage.from(DOCS_BUCKET).download(doc.storage_path);
+      if (file.error || !file.data) { skipped.push(`${doc.file_name} — couldn't open the stored file`); return null; }
+      const buf = Buffer.from(await file.data.arrayBuffer());
+      if (ext === 'pdf') return [{ type: 'document', title: label, source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') } }];
+      if (ext === 'csv') return [{ type: 'text', text: `${label}\n${buf.toString('utf8').slice(0, 200_000)}` }];
+      return [{ type: 'text', text: label }, { type: 'image', source: { type: 'base64', media_type: IMAGE[ext], data: buf.toString('base64') } }];
+    };
+
+    const appBlocks: Block[] = [];
+    for (const doc of appDocs) { const b = await toBlocks(doc); if (b) appBlocks.push(...b); }
+    if (!appBlocks.length) throw new Error(`Couldn't read the application: ${skipped.join('; ')}.`);
+    const appBytes = appDocs.reduce((n, x) => n + Number(x.size_bytes || 0), 0);
 
     const today = new Date();
-    blocks.push({ type: 'text', text: `Today is ${today.toISOString().slice(0, 10)}. Read the files above and reply with the JSON.` });
+    const batches = planBatches(stmtDocs, Math.max(MAX_BATCH_BYTES - appBytes, 4 * 1024 * 1024), MAX_BATCH_FILES);
+    let read = appDocs.length;
 
-    const ex = await askClaude(key, blocks);
+    // One request: the application rides with the first batch only. A batch that is still too many pages is halved and retried.
+    const runBatch = async (group: DealDocument[], first: boolean, label: string): Promise<Extraction[]> => {
+      const blocks: Block[] = first ? [...appBlocks] : [];
+      let got = 0;
+      for (const doc of group) { const b = await toBlocks(doc); if (b) { blocks.push(...b); got++; } }
+      if (!got && !first) return [];
+      const note = batches.length === 1 && group.length === stmtDocs.length ? ''
+        : first ? `These are the application and some of the merchant's bank statements (${label}); the other statements are read separately. `
+        : `These are more bank statements for the same merchant (${label}). The application was read separately — leave every application field empty. `;
+      blocks.push({ type: 'text', text: `${note}Today is ${today.toISOString().slice(0, 10)}. Read the files above and reply with the JSON.` });
+      try {
+        const ex = await askClaude(key, blocks);
+        read += got;
+        return [ex];
+      } catch (e) {
+        if (!(e instanceof TooMuch) || group.length < 2) throw e;
+        const half = Math.ceil(group.length / 2);
+        const a = await runBatch(group.slice(0, half), first, label + 'a');
+        const b = await runBatch(group.slice(half), false, label + 'b');
+        return [...a, ...b];
+      }
+    };
+
+    const results: Extraction[][] = new Array(batches.length);
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(PARALLEL, batches.length) }, async () => {
+      while (next < batches.length) {
+        const i = next++;
+        results[i] = await runBatch(batches[i], i === 0, `batch ${i + 1} of ${batches.length}`);
+      }
+    }));
+    const ex = mergeExtractions(results.flat());
+    if (!ex.statements.length) throw new Error('The document reader found no statement months in these files. Check they are bank statements.');
 
     const existing = await db.from('positions').select('funder, status').eq('deal_id', id);
     if (existing.error) throw new Error(existing.error.message);
@@ -125,12 +176,12 @@ async function askClaude(key: string, content: Block[]): Promise<Extraction> {
       const m: string = j?.error?.message ?? r.statusText;
       if (r.status === 401) throw new Error('The ANTHROPIC_API_KEY in Vercel was rejected. Check the key and redeploy.');
       if (r.status === 400 && /credit|billing/i.test(m)) throw new Error('The Anthropic account is out of credit. Add credit in the Anthropic Console, then try again.');
-      if (r.status === 400 && /too long|pages|too large|exceed/i.test(m)) throw new Error('Too many pages to read at once. Upload just the last 4 months of statements and try again.');
+      if (r.status === 400 && /too long|pages|too large|exceed/i.test(m)) throw new TooMuch('A statement is too many pages to read. Split it into smaller PDFs (one month each) and try again.');
       if (r.status === 400 && /password|encrypt/i.test(m)) throw new Error('A PDF is password-protected. Ask the merchant for an unlocked copy.');
       if (r.status === 429 || r.status === 529) throw new Error('The document reader is busy right now. Try again in a minute.');
       throw new Error(`The document reader couldn't finish: ${m}`);
     }
-    if (j.stop_reason === 'max_tokens') throw new Error('Too much to read at once. Upload just the last 4 months of statements and try again.');
+    if (j.stop_reason === 'max_tokens') throw new TooMuch('A statement has too much in it to read. Split it into smaller PDFs (one month each) and try again.');
     if (j.stop_reason === 'refusal') throw new Error("The document reader declined to read these files. Check they're the application and bank statements.");
     const text = (j.content ?? []).filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join('');
     let x: Partial<Extraction>;
