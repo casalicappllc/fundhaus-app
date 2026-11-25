@@ -28,6 +28,9 @@ export default function DealPage() {
   const [posKey, setPosKey] = useState(0);
   // null = closed, 'all' = every lender that fits, otherwise the one lender id picked from its row.
   const [sending, setSending] = useState<string | null>(null);
+  // Lender name to start a new offer for ('' = blank form); null = nothing asked.
+  const [offerFor, setOfferFor] = useState<string | null>(null);
+  const offerHandled = useCallback(() => setOfferFor(null), []);
 
   const load = useCallback(async () => {
     const [d, l, s] = await Promise.all([
@@ -84,6 +87,7 @@ export default function DealPage() {
           <select style={{ width: 'auto' }} value={deal.stage} onChange={e => setStage(e.target.value)}>
             {STAGES.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
           </select>
+          <button className="btn solid" onClick={() => setOfferFor('')}>+ Add offer</button>
           <button className="btn flat" onClick={() => setEditing(true)}>Edit</button>
           <button className="btn danger" onClick={remove}>Delete</button>
         </div>
@@ -115,6 +119,7 @@ export default function DealPage() {
             </div>
           </div>
           <Positions key={posKey} deal={deal} onCountChange={load} onLoaded={setPositions} />
+          <Offers deal={deal} lenders={lenders} subs={subs} onChange={load} addFor={offerFor} onAddHandled={offerHandled} />
           <div className="card">
             <div className="match-top">
               <h3>Lender match — {matches.filter(m => m.pass).length} of {matches.length} fit</h3>
@@ -132,6 +137,7 @@ export default function DealPage() {
                   <div className="tags">{m.checks.map(c => <span key={c.label} className={`tag ${c.ok ? 'a' : 'c'}`}>{c.ok ? '✓' : '✕'} {c.label}</span>)}</div>
                   {fails.length > 0 && <p className="fail" style={{ marginTop: 9, marginBottom: 0 }}>{fails.map(c => `${c.label}: ${c.got} (needs ${c.need})`).join(' · ')}</p>}
                   <div className="acts">
+                    <button className="btn sm solid" onClick={() => setOfferFor(m.lender.name)}>+ Add offer</button>
                     {!s && canEmail && <button className="btn sm send" onClick={() => setSending(m.lender.id)}>✉ Send{m.pass ? '' : ' anyway'}</button>}
                     {!s && <button className="btn sm flat" onClick={() => submit(m.lender.id)}>{m.pass ? 'Mark submitted' : 'Mark submitted anyway'} (no email)</button>}
                     {s && !s.sent_at && s.status === 'sent' && canEmail && <button className="btn sm send" onClick={() => setSending(m.lender.id)}>✉ Send email</button>}
@@ -147,7 +153,6 @@ export default function DealPage() {
               );
             })}
           </div>
-          <Offers deal={deal} lenders={lenders} subs={subs} onChange={load} />
         </div>
         <div>
           <div className="card">

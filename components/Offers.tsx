@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Deal, Lender, Submission } from '@/lib/types';
 import { offerMath, parseNum, rateProblem, showRate, showTerm, type Offer } from '@/lib/offers';
@@ -9,7 +9,18 @@ const whole = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 const day = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 /** Offers lenders came back with: lender, amount, buy rate, sell rate, term (daily or weekly payments). */
-export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; lenders: Lender[]; subs: Submission[]; onChange: () => void }) {
+export default function Offers({ deal, lenders, subs, onChange, addFor, onAddHandled }: {
+  deal: Deal; lenders: Lender[]; subs: Submission[]; onChange: () => void;
+  /** Set to a lender's name (from that lender's "Add offer" button) to open the form with the lender filled in. */
+  addFor?: string | null; onAddHandled?: () => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [preset, setPreset] = useState('');
+  useEffect(() => {
+    if (addFor == null) return;
+    setPreset(addFor); setErr(''); setEditing('new'); onAddHandled?.();
+    setTimeout(() => { box.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); box.current?.querySelector<HTMLInputElement>(addFor ? 'input[name="amount"]' : 'input[name="lender"]')?.focus({ preventScroll: true }); }, 60);
+  }, [addFor, onAddHandled]);
   const [rows, setRows] = useState<Offer[]>([]);
   const [editing, setEditing] = useState<Offer | 'new' | null>(null);
   const [err, setErr] = useState('');
@@ -65,9 +76,12 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
 
   const cur = editing && editing !== 'new' ? editing : null;
   return (
-    <div className="card">
-      <h3>Offers{rows.length > 0 && ` — ${rows.length}`}</h3>
-      {rows.length === 0 && !editing && <p className="note">No offers yet. When a lender comes back, add the amount, buy rate, sell rate, term (daily or weekly) and payment here.</p>}
+    <div className="card" ref={box} id="offers">
+      <div className="match-top">
+        <h3>Offers{rows.length > 0 && ` — ${rows.length}`}</h3>
+        {!editing && <button className="btn solid" onClick={() => { setPreset(''); setErr(''); setEditing('new'); }}>+ Add offer</button>}
+      </div>
+      {rows.length === 0 && !editing && <p className="note">No offers yet. When a lender comes back, press <b>+ Add offer</b> and put in the amount, buy rate, sell rate, term (daily or weekly) and payment.</p>}
       {rows.length > 0 && (
         <div className="tablewrap">
           <table>
@@ -98,9 +112,9 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
       )}
       {rows.some(o => o.buy_rate != null) && <p className="note" style={{ fontSize: 12, marginTop: 8 }}>Payback = amount × sell rate (buy rate if there&apos;s no sell rate yet). Spread = amount × (sell − buy). A payment marked &ldquo;worked out&rdquo; is payback ÷ number of payments — type the lender&apos;s payment to replace it.</p>}
       {editing ? (
-        <form className="pos-form" onSubmit={save} key={cur?.id ?? 'new'}>
+        <form className="pos-form" onSubmit={save} key={cur?.id ?? 'new' + preset}>
           <div className="form">
-            <div><label>Lender</label><input name="lender" list="offer-lenders" required defaultValue={cur?.lender_name ?? ''} placeholder="Pick or type a lender" autoComplete="off" />
+            <div><label>Lender</label><input name="lender" list="offer-lenders" required defaultValue={cur?.lender_name ?? preset} placeholder="Pick or type a lender" autoComplete="off" />
               <datalist id="offer-lenders">{lenders.map(l => <option key={l.id} value={l.name} />)}</datalist></div>
             <div><label>Amount ($)</label><input name="amount" inputMode="decimal" required defaultValue={cur?.amount ?? ''} placeholder="e.g. 40,000" /></div>
             <div><label>Buy rate</label><input name="buy_rate" inputMode="decimal" defaultValue={cur?.buy_rate ?? ''} placeholder="e.g. 1.25" /></div>
@@ -118,7 +132,7 @@ export default function Offers({ deal, lenders, subs, onChange }: { deal: Deal; 
             <button type="button" className="btn flat" onClick={() => { setEditing(null); setErr(''); }}>Cancel</button>
           </div>
         </form>
-      ) : <button className="btn flat" style={{ marginTop: 12 }} onClick={() => { setErr(''); setEditing('new'); }}>+ Add offer</button>}
+      ) : null}
       {err && <div className="err">{err}</div>}
     </div>
   );
