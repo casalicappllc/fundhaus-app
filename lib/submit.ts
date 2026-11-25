@@ -28,7 +28,7 @@ export function parseEmails(s: string | null | undefined): string[] {
 }
 
 /** Copied on every email to every lender, so the team has a record of each submission. */
-export const ALWAYS_CC = ['funding@assured-assets.com'];
+export const ALWAYS_CC = ['funding@assured-assets.com', 'admin@assured-assets.net'];
 
 /** First address is To, the rest are CC, plus ALWAYS_CC on every email. */
 export function recipients(l: Pick<Lender, 'submit_emails'>) {
