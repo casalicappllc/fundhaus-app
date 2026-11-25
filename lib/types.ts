@@ -32,7 +32,7 @@ export const DOCS_BUCKET = 'deal-docs';
 
 export const STAGES: [string, string][] = [
   ['new', 'New lead'], ['prequal', 'Pre-qualified'], ['submitted', 'Submitted'],
-  ['offers', 'Offers in'], ['contracts', 'Contracts out'], ['funded', 'Funded'], ['declined', 'Declined'],
+  ['offers', 'Offers in'], ['contracts', 'Contracts out'], ['funded', 'Funded'], ['declined', 'Declined / Dead deal'],
 ];
 export const INDUSTRIES = ['Adult','Auto Repair','Auto Sales','Bail Bonds','Cannabis / CBD','Cash Business','Collections','Construction','Consulting',
   'Crypto','Debt Relief / Credit Repair','Dental','E-Commerce','Firearms','Fitness','Gambling','Gas Station','Healthcare','Hospitality',

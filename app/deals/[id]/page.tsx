@@ -88,6 +88,7 @@ export default function DealPage() {
             {STAGES.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
           </select>
           <button className="btn solid" onClick={() => setOfferFor('')}>+ Add offer</button>
+          {deal.stage !== 'declined' && deal.stage !== 'funded' && <button className="btn flat" onClick={() => setStage('declined')}>Declined / Dead</button>}
           <button className="btn flat" onClick={() => setEditing(true)}>Edit</button>
           <button className="btn danger" onClick={remove}>Delete</button>
         </div>
