@@ -44,7 +44,7 @@ create table if not exists deals (
   amount_requested integer not null default 0,
   use_of_funds text,
   stage text not null default 'new'
-    check (stage in ('new','prequal','submitted','offers','contracts','funded','declined')),
+    check (stage in ('new','prequal','submitted','offers','contracts','signed','funded','declined')),
   funded_amount integer,
   commission integer,
   notes text,
