@@ -25,8 +25,10 @@ export type DealDocument = {
   original_name?: string | null; // the name it was uploaded with, once a statement has been renamed
 };
 export const DOC_KINDS: [string, string][] = [
-  ['bank_statement', 'Bank statement'], ['application', 'Application'], ['id', "Driver's license / ID"],
-  ['voided_check', 'Voided check'], ['tax_return', 'Tax return'], ['contract', 'Contract'], ['other', 'Other'],
+  ['bank_statement', 'Bank statement'], ['tax_return', 'Tax return'], ['ar', 'A/R'], ['profit_loss', 'Profit & Loss'],
+  ['balance_sheet', 'Balance sheet'], ['ein_letter', 'EIN letter'],
+  ['application', 'Application'], ['id', "Driver's license / ID"], ['voided_check', 'Voided check'],
+  ['contract', 'Contract'], ['other', 'Other'],
 ];
 export const DOCS_BUCKET = 'deal-docs';
 
